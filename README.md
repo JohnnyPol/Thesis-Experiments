@@ -1,0 +1,68 @@
+What we could do that remains:
+```
+├── apps/
+│   ├── worker/
+│   │   ├── main.py
+│   │   ├── server.py
+│   │   └── service.yaml
+│   ├── master/
+│   │   ├── main.py
+│   │   ├── coordinator.py
+│   │   └── scheduler.py
+│   └── single_node/
+│       └── main.py
+├── checkpoints/
+│   ├── baseline/
+│   ├── early_exit/
+│   └── gating/
+├── data/
+│   ├── raw/
+│   ├── processed/
+│   └── cache/
+├── results/
+│   ├── exp1_single_model/
+│   │   ├── 1_single_node/
+│   │   │   ├── run_001/
+│   │   │   │   ├── config.yaml
+│   │   │   │   ├── metrics.json
+│   │   │   │   ├── system_metrics.csv
+│   │   │   │   ├── predictions.csv
+│   │   │   │   ├── exits.csv
+│   │   │   │   ├── logs.txt
+│   │   │   │   └── plots/
+│   │   │   └── run_002/
+│   │   ├── 2_homogeneous_nodes/
+│   │   │   ├── run_001/
+│   │   │   └── run_002/
+│   │   └── 3_heterogeneous_nodes/
+│   │       ├── run_001/
+│   │       └── run_002/
+│   ├── exp2_multi_model/
+│   └── exp3_advanced_exit_policies/
+├── notebooks/
+│   ├── 01_model_dev.ipynb
+│   ├── 02_training_debug.ipynb
+│   ├── 03_single_node_debug.ipynb
+│   ├── 04_distributed_debug.ipynb
+│   └── 05_results_analysis.ipynb
+├── docs/
+│   ├── experiment_plan.md
+│   ├── metrics_definition.md
+│   ├── topology.md
+│   ├── deployment.md
+│   ├── reproducibility.md
+│   └── thesis_figures/
+├── tests/
+│   ├── test_models.py
+│   ├── test_partitioning.py
+│   ├── test_entropy_policy.py
+│   ├── test_serialization.py
+│   ├── test_metrics.py
+│   └── test_end_to_end.py
+└── services/
+    ├── systemd/
+    │   ├── thesis-worker.service
+    │   └── thesis-master.service
+    └── docker/
+        └── Dockerfile
+```
