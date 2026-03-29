@@ -1,0 +1,20 @@
+name: resnet18_ee_gating
+type: resnet_early_exit
+variant: resnet18
+
+architecture:
+  block: ResidualBlock
+  layers: [2, 2, 2, 2]
+  num_classes: 10
+  exits:
+    count: 3
+    positions: [layer0, layer1, layer2]
+
+exit_policy:
+  type: gating
+  gating_model_path: ./checkpoints/gating/resnet18_gating.pth
+  threshold: 0.5
+
+weights:
+  path: ./checkpoints/ee/resnet18_ee_gating.pth
+  strict: true

@@ -1,0 +1,14 @@
+torch
+torchvision
+codecarbon
+numpy
+pandas
+seaborn
+matplotlib
+einops
+tqdm
+opencv-python
+scikit-image
+scipy
+scikit-learn
+PyYAML

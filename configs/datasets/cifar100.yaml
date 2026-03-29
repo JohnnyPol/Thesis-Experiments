@@ -1,0 +1,22 @@
+name: cifar100
+root: ./data
+num_classes: 100
+download: true
+
+input:
+  image_size: 256
+  channels: 3
+
+normalization:
+  mean: [0.5071, 0.4867, 0.4408]
+  std: [0.2675, 0.2565, 0.2761]
+
+loader:
+  batch_size: 1
+  shuffle: false
+  num_workers: 0
+  pin_memory: false
+
+splits:
+  valid_size: 0.1
+  random_seed: 42

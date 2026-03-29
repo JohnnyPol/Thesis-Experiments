@@ -1,0 +1,21 @@
+system_name: single_node_worker1
+mode: single_node
+
+node:
+  name: worker1
+  role: worker
+  host: worker1
+
+runtime:
+  device: cpu
+
+paths:
+  data_root: ./data
+  results_root: ./results
+
+monitoring:
+  network_interface: eth0
+  collect_latency: true
+  collect_network: true
+  collect_energy: true
+  collect_system_stats: false

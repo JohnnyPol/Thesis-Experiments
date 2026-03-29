@@ -19,26 +19,6 @@ What we could do that remains:
 │   ├── raw/
 │   ├── processed/
 │   └── cache/
-├── results/
-│   ├── exp1_single_model/
-│   │   ├── 1_single_node/
-│   │   │   ├── run_001/
-│   │   │   │   ├── config.yaml
-│   │   │   │   ├── metrics.json
-│   │   │   │   ├── system_metrics.csv
-│   │   │   │   ├── predictions.csv
-│   │   │   │   ├── exits.csv
-│   │   │   │   ├── logs.txt
-│   │   │   │   └── plots/
-│   │   │   └── run_002/
-│   │   ├── 2_homogeneous_nodes/
-│   │   │   ├── run_001/
-│   │   │   └── run_002/
-│   │   └── 3_heterogeneous_nodes/
-│   │       ├── run_001/
-│   │       └── run_002/
-│   ├── exp2_multi_model/
-│   └── exp3_advanced_exit_policies/
 ├── notebooks/
 │   ├── 01_model_dev.ipynb
 │   ├── 02_training_debug.ipynb

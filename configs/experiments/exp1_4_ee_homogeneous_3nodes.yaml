@@ -1,0 +1,26 @@
+experiment:
+  id: exp1_4
+  name: ee_homogeneous_3nodes
+  description: Early-exit ResNet-18 distributed across three homogeneous worker nodes.
+
+config_refs:
+  dataset: configs/datasets/cifar10.yaml
+  model: configs/models/resnet18_ee_entropy.yaml
+  system: configs/systems/homogeneous_3workers.yaml
+
+runtime:
+  batch_size: 1
+  warmup_samples: 20
+  save_per_sample_metrics: true
+  save_predictions: false
+
+partitioning:
+  node_1:
+    stages: [conv1, maxpool, layer0, exit0]
+  node_2:
+    stages: [layer1, exit1, layer2, exit2]
+  node_3:
+    stages: [layer3, avgpool, fc]
+
+output:
+  dir: ./results/exp1_single_model/03_homogeneous_nodes/run_002

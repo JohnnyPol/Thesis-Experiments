@@ -1,0 +1,19 @@
+name: resnet50_ee
+type: resnet_early_exit
+variant: resnet50
+
+architecture:
+  block: ResidualBlock50
+  layers: [3, 4, 6, 3]
+  num_classes: 10
+  exits:
+    count: 3
+    positions: [layer0, layer1, layer2]
+
+exit_policy:
+  type: entropy
+  threshold: 0.5
+
+weights:
+  path: ./checkpoints/ee/resnet50_ee.pth
+  strict: true
