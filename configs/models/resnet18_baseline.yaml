@@ -1,12 +1,6 @@
 name: resnet18_baseline
-type: resnet_baseline
-variant: resnet18
-
-architecture:
-  block: ResidualBlock
-  layers: [2, 2, 2, 2]
-  num_classes: 10
+type: baseline
+architecture: resnet18
 
 weights:
-  path: ./checkpoints/baseline/resnet18_baseline.pth
-  strict: true
+  path: ./checkpoints/resnet18_baseline.pth

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.models.blocks import ExitBlock, ExitBlock50
+from src.models.exit_blocks import ExitBlock, ExitBlock50
 
 class ResNetEE18(nn.Module):
     def __init__(self, block, layers, num_classes=10, confidence_threshold=0.9):

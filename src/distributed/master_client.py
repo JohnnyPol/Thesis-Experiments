@@ -1,0 +1,269 @@
+from __future__ import annotations
+
+import argparse
+import json
+import time
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+import torch
+from codecarbon import EmissionsTracker
+
+from src.data.loaders import data_loader
+from src.inference.partition_runner import run_two_stage_inference
+from src.metrics.accuracy import compute_accuracy, update_correct_total
+from src.metrics.exits import initialize_exit_counts, summarize_exit_counts, update_exit_counts
+from src.metrics.latency import (
+    compute_latency_stats,
+    compute_throughput,
+    compute_total_inference_time,
+)
+from src.metrics.network import compute_network_delta, read_network_bytes
+from src.metrics.utilization import compute_node_utilization
+from src.utils.config import load_experiment_bundle, resolve_path
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Master coordinator for 2-worker EE inference.")
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=True,
+        help="Path to experiment YAML config.",
+    )
+    return parser.parse_args()
+
+
+def _find_worker_cfg(system_cfg: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    for worker_cfg in system_cfg.get("workers", []):
+        if worker_cfg.get("worker_id") == worker_id:
+            return worker_cfg
+    raise ValueError(f"Worker '{worker_id}' not found in system config")
+
+
+def save_results(
+    output_dir: str,
+    summary: dict[str, Any],
+    per_sample_df: pd.DataFrame,
+    config_bundle: dict[str, Any],
+) -> None:
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    with open(out_path / "metrics.json", "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+
+    per_sample_df.to_csv(out_path / "latencies.csv", index=False)
+
+    with open(out_path / "resolved_config.json", "w", encoding="utf-8") as f:
+        json.dump(config_bundle, f, indent=2)
+
+
+def evaluate_distributed_ee_two_workers(
+    dataset_cfg: dict[str, Any],
+    system_cfg: dict[str, Any],
+    data_dir: str,
+    batch_size: int,
+    warmup_samples: int,
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    if batch_size != 1:
+        raise ValueError("Distributed EE experiment currently supports batch_size=1 only.")
+
+    num_workers = dataset_cfg.get("loader", {}).get("num_workers", 0)
+    test_loader = data_loader(
+        data_dir=data_dir,
+        batch_size=batch_size,
+        test=True,
+        num_workers=num_workers,
+        dataset_config=dataset_cfg,
+    )
+
+    worker1_cfg = _find_worker_cfg(system_cfg, "worker1")
+    worker2_cfg = _find_worker_cfg(system_cfg, "worker2")
+
+    if warmup_samples > 0:
+        warmup_count = 0
+        with torch.no_grad():
+            for images, _ in test_loader:
+                _ = run_two_stage_inference(
+                    image_tensor=images.cpu(),
+                    sample_id=warmup_count,
+                    worker1_cfg=worker1_cfg,
+                    worker2_cfg=worker2_cfg,
+                    timeout_sec=float(system_cfg.get("runtime", {}).get("request_timeout_sec", 30.0)),
+                )
+                warmup_count += images.size(0)
+                if warmup_count >= warmup_samples:
+                    break
+
+        test_loader = data_loader(
+            data_dir=data_dir,
+            batch_size=batch_size,
+            test=True,
+            num_workers=num_workers,
+            dataset_config=dataset_cfg,
+        )
+
+    master_monitor_cfg = system_cfg.get("monitoring", {})
+    network_interface = master_monitor_cfg.get("network_interface", None)
+
+    correct = 0
+    total = 0
+    latencies: list[float] = []
+    per_sample_rows: list[dict[str, Any]] = []
+    exit_counts = initialize_exit_counts(4)
+
+    protocol_bytes_total = 0
+    worker1_compute_total = 0.0
+    worker2_compute_total = 0.0
+    remote_compute_total = 0.0
+
+    net_before = read_network_bytes(interface=network_interface)
+
+    tracker = EmissionsTracker(measure_power_secs=1)
+    tracker.start()
+    experiment_start = time.time()
+
+    with torch.no_grad():
+        sample_index = 0
+        for images, labels in test_loader:
+            labels = labels.cpu()
+
+            start = time.time()
+            distributed_output = run_two_stage_inference(
+                image_tensor=images.cpu(),
+                sample_id=sample_index,
+                worker1_cfg=worker1_cfg,
+                worker2_cfg=worker2_cfg,
+                timeout_sec=float(system_cfg.get("runtime", {}).get("request_timeout_sec", 30.0)),
+            )
+            end = time.time()
+
+            logits = distributed_output["logits"]
+            exit_id = int(distributed_output["exit_id"])
+
+            latency = end - start
+            latencies.append(latency)
+
+            protocol_bytes_total += int(distributed_output["protocol_bytes"])
+            worker1_compute_total += float(distributed_output["worker1_compute_time_sec"])
+            worker2_compute_total += float(distributed_output["worker2_compute_time_sec"])
+            remote_compute_total += float(distributed_output["remote_compute_time_sec"])
+
+            update_exit_counts(exit_counts, exit_id)
+
+            predicted = logits.argmax(dim=1).cpu()
+            correct, total = update_correct_total(predicted, labels, correct, total)
+
+            per_sample_rows.append(
+                {
+                    "sample_index": sample_index,
+                    "batch_size": int(labels.size(0)),
+                    "latency_sec": float(latency),
+                    "predicted_class": int(predicted[0].item()),
+                    "true_class": int(labels[0].item()),
+                    "correct": int((predicted == labels).sum().item()),
+                    "exit_id": exit_id,
+                    "protocol_bytes": int(distributed_output["protocol_bytes"]),
+                    "stage1_request_bytes": int(distributed_output["stage1_request_bytes"]),
+                    "stage1_response_bytes": int(distributed_output["stage1_response_bytes"]),
+                    "stage2_request_bytes": int(distributed_output["stage2_request_bytes"]),
+                    "stage2_response_bytes": int(distributed_output["stage2_response_bytes"]),
+                    "worker1_compute_time_sec": float(distributed_output["worker1_compute_time_sec"]),
+                    "worker2_compute_time_sec": float(distributed_output["worker2_compute_time_sec"]),
+                    "remote_compute_time_sec": float(distributed_output["remote_compute_time_sec"]),
+                }
+            )
+            sample_index += 1
+
+    experiment_end = time.time()
+    tracker.stop()
+    net_after = read_network_bytes(interface=network_interface)
+
+    total_inference_time_sec = compute_total_inference_time(experiment_start, experiment_end)
+    latency_stats = compute_latency_stats(latencies)
+    throughput = compute_throughput(total, total_inference_time_sec)
+    node_utilization = compute_node_utilization(
+        latency_stats["busy_time_sec"],
+        total_inference_time_sec,
+    )
+    accuracy = compute_accuracy(correct, total)
+    network_stats = compute_network_delta(net_before, net_after)
+
+    emissions_data = tracker._prepare_emissions_data()
+    carbon_kg = emissions_data.emissions
+    energy_kwh = emissions_data.energy_consumed
+
+    results: dict[str, Any] = {
+        "mode": "distributed_early_exit_2workers",
+        "accuracy": accuracy,
+        "num_correct": int(correct),
+        "num_samples": int(total),
+        "total_inference_time_sec": float(total_inference_time_sec),
+        "throughput_samples_per_sec": float(throughput),
+        "master_node_utilization": float(node_utilization),
+        "master_carbon_kg": float(carbon_kg) if carbon_kg is not None else None,
+        "master_energy_kWh": float(energy_kwh) if energy_kwh is not None else None,
+        "master_network_rx_bytes": int(network_stats["rx_bytes"]),
+        "master_network_tx_bytes": int(network_stats["tx_bytes"]),
+        "master_network_total_bytes": int(network_stats["total_bytes"]),
+        "protocol_bytes_total": int(protocol_bytes_total),
+        "avg_protocol_bytes_per_sample": float(protocol_bytes_total / total) if total > 0 else 0.0,
+        "worker1_compute_time_total_sec": float(worker1_compute_total),
+        "worker2_compute_time_total_sec": float(worker2_compute_total),
+        "remote_compute_time_total_sec": float(remote_compute_total),
+        "worker1_compute_time_avg_sec": float(worker1_compute_total / total) if total > 0 else 0.0,
+        "worker2_compute_time_avg_sec": float(worker2_compute_total / total) if total > 0 else 0.0,
+        "remote_compute_time_avg_sec": float(remote_compute_total / total) if total > 0 else 0.0,
+    }
+    results.update(latency_stats)
+    results.update(summarize_exit_counts(exit_counts, total))
+
+    per_sample_df = pd.DataFrame(per_sample_rows)
+    return results, per_sample_df
+
+
+def main() -> None:
+    args = parse_args()
+
+    bundle = load_experiment_bundle(args.config)
+    experiment_cfg = bundle["experiment_config"]
+    dataset_cfg = bundle["dataset_config"]
+    model_cfg = bundle["model_config"]
+    system_cfg = bundle["system_config"]
+    repo_root = bundle["repo_root"]
+
+    output_dir = resolve_path(experiment_cfg["output"]["dir"], repo_root)
+    data_dir = resolve_path(dataset_cfg["root"], repo_root)
+
+    batch_size = int(experiment_cfg.get("runtime", {}).get("batch_size", 1))
+    warmup_samples = int(experiment_cfg.get("runtime", {}).get("warmup_samples", 0))
+
+    summary, per_sample_df = evaluate_distributed_ee_two_workers(
+        dataset_cfg=dataset_cfg,
+        system_cfg=system_cfg,
+        data_dir=str(data_dir),
+        batch_size=batch_size,
+        warmup_samples=warmup_samples,
+    )
+
+    weights_path = None
+    if isinstance(model_cfg.get("weights"), dict):
+        weights_path = resolve_path(model_cfg["weights"].get("path"), repo_root)
+
+    summary["experiment_id"] = experiment_cfg.get("experiment", {}).get("id")
+    summary["experiment_name"] = experiment_cfg.get("experiment", {}).get("name")
+    summary["dataset_name"] = dataset_cfg.get("name")
+    summary["model_name"] = model_cfg.get("name")
+    summary["system_name"] = system_cfg.get("system_name")
+    summary["weights_path"] = weights_path
+    summary["data_dir"] = data_dir
+    summary["output_dir"] = output_dir
+
+    save_results(str(output_dir), summary, per_sample_df, bundle)
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == "__main__":
+    main()

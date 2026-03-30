@@ -1,25 +1,26 @@
 system_name: homogeneous_2workers
-mode: distributed
 
-nodes:
-  - name: worker1
-    role: worker
-    host: worker1
+runtime:
+  request_timeout_sec: 30.0
+
+master:
+  role: master
+  device: cpu
+
+workers:
+  - worker_id: worker1
+    partition_id: 0
+    host: 0.0.0.0
+    connect_host: 192.168.1.101
+    port: 9101
     device: cpu
-  - name: worker2
-    role: worker
-    host: worker2
+
+  - worker_id: worker2
+    partition_id: 1
+    host: 0.0.0.0
+    connect_host: 192.168.1.102
+    port: 9102
     device: cpu
-
-paths:
-  data_root: ./data
-  results_root: ./results
-
-network:
-  interface: eth0
-  protocol: tcp
 
 monitoring:
-  collect_latency: true
-  collect_network: true
-  collect_energy: true
+  network_interface: eth0
