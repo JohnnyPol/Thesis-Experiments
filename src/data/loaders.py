@@ -71,9 +71,6 @@ def data_loader(
     """
     Build CIFAR-10 train/validation or test dataloaders.
 
-    This function keeps the logic of your notebook, while allowing
-    config-driven transforms and loader parameters.
-
     Args:
         data_dir: Dataset root path.
         batch_size: Batch size.
@@ -165,35 +162,3 @@ def data_loader(
     )
 
     return train_loader, valid_loader
-
-
-def build_test_loader_from_config(
-    dataset_config: dict[str, Any],
-    batch_size: int | None = None,
-    data_dir: str | None = None,
-):
-    """
-    Convenience wrapper for building the test loader directly from dataset config.
-
-    Args:
-        dataset_config: Loaded dataset YAML config.
-        batch_size: Optional override for batch size.
-        data_dir: Optional override for dataset root.
-
-    Returns:
-        Test DataLoader
-    """
-    loader_cfg = dataset_config.get("loader", {})
-    root = data_dir if data_dir is not None else dataset_config.get("root", "./data")
-    bs = batch_size if batch_size is not None else loader_cfg.get("batch_size", 1)
-    shuffle = loader_cfg.get("shuffle", False)
-    num_workers = loader_cfg.get("num_workers", 0)
-
-    return data_loader(
-        data_dir=root,
-        batch_size=bs,
-        shuffle=shuffle,
-        test=True,
-        num_workers=num_workers,
-        dataset_config=dataset_config,
-    )

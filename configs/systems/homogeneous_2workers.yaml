@@ -7,6 +7,10 @@ master:
   role: master
   device: cpu
 
+pipeline_order:
+  - worker1
+  - worker2
+
 workers:
   - worker_id: worker1
     partition_id: 0

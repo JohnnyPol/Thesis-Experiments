@@ -1,7 +1,7 @@
 experiment:
   id: exp1_4
   name: ee_homogeneous_3nodes
-  description: Early-exit ResNet-18 distributed across three homogeneous worker nodes.
+  description: Early-exit ResNet-18 inference distributed across 3 homogeneous worker nodes, coordinated by a master node.
 
 config_refs:
   dataset: configs/datasets/cifar10.yaml
@@ -14,13 +14,5 @@ runtime:
   save_per_sample_metrics: true
   save_predictions: false
 
-partitioning:
-  node_1:
-    stages: [conv1, maxpool, layer0, exit0]
-  node_2:
-    stages: [layer1, exit1, layer2, exit2]
-  node_3:
-    stages: [layer3, avgpool, fc]
-
 output:
-  dir: ./results/exp1_single_model/03_homogeneous_nodes/run_002
+  dir: ./results/exp1_single_model/04_homogeneous_3workers_ee/run_001

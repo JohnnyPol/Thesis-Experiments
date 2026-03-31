@@ -1,29 +1,38 @@
 system_name: homogeneous_3workers
-mode: distributed
 
-nodes:
-  - name: worker1
-    role: worker
-    host: worker1
-    device: cpu
-  - name: worker2
-    role: worker
-    host: worker2
-    device: cpu
-  - name: worker3
-    role: worker
-    host: worker3
+runtime:
+  request_timeout_sec: 30.0
+
+master:
+  role: master
+  device: cpu
+
+pipeline_order:
+  - worker1
+  - worker2
+  - worker3
+
+workers:
+  - worker_id: worker1
+    partition_id: 0
+    host: 0.0.0.0
+    connect_host: 192.168.1.101
+    port: 9101
     device: cpu
 
-paths:
-  data_root: ./data
-  results_root: ./results
+  - worker_id: worker2
+    partition_id: 1
+    host: 0.0.0.0
+    connect_host: 192.168.1.102
+    port: 9102
+    device: cpu
 
-network:
-  interface: eth0
-  protocol: tcp
+  - worker_id: worker3
+    partition_id: 2
+    host: 0.0.0.0
+    connect_host: 192.168.1.103
+    port: 9103
+    device: cpu
 
 monitoring:
-  collect_latency: true
-  collect_network: true
-  collect_energy: true``
+  network_interface: eth0

@@ -18,15 +18,29 @@ from src.distributed.rpc_messages import (
     make_terminal_response,
     validate_request,
 )
-from src.distributed.serialization import bytes_to_tensor, recv_message, send_message, tensor_to_bytes
+from src.distributed.serialization import (
+    bytes_to_tensor,
+    recv_message,
+    send_message,
+    tensor_to_bytes,
+)
 from src.models.partitioning import build_partition_module
 from src.utils.config import load_experiment_bundle
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Distributed worker server for partitioned EE inference.")
-    parser.add_argument("--config", type=str, required=True, help="Path to experiment YAML config.")
-    parser.add_argument("--worker-id", type=str, required=True, help="Worker identifier from system config.")
+    parser = argparse.ArgumentParser(
+        description="Distributed worker server for partitioned EE inference."
+    )
+    parser.add_argument(
+        "--config", type=str, required=True, help="Path to experiment YAML config."
+    )
+    parser.add_argument(
+        "--worker-id",
+        type=str,
+        required=True,
+        help="Worker identifier from system config.",
+    )
     return parser.parse_args()
 
 
@@ -104,12 +118,14 @@ def main() -> None:
 
     worker_cfg = find_worker_cfg(system_cfg, args.worker_id)
     partition_id = int(worker_cfg["partition_id"])
+    num_partitions = len(system_cfg.get("workers", []))
     bind_host = str(worker_cfg.get("bind_host", worker_cfg["host"]))
     port = int(worker_cfg["port"])
     device = torch.device(worker_cfg.get("device", "cpu"))
 
     partition_module = build_partition_module(
         partition_id=partition_id,
+        num_partitions=num_partitions,
         model_cfg=model_cfg,
         dataset_cfg=dataset_cfg,
         repo_root=repo_root,
@@ -124,6 +140,7 @@ def main() -> None:
     print(
         f"[worker_server] worker_id={args.worker_id} "
         f"partition_id={partition_id} "
+        f"num_partitions={num_partitions} "
         f"bind={bind_host}:{port} "
         f"device={device}"
     )
@@ -132,6 +149,7 @@ def main() -> None:
         while True:
             conn, addr = server.accept()
             with conn:
+                request = {}
                 try:
                     request, _ = recv_message(conn)
                     response = handle_request(
@@ -140,9 +158,21 @@ def main() -> None:
                         device=device,
                     )
                 except Exception as exc:
-                    request_id = request.get("request_id", "unknown") if "request" in locals() else "unknown"
-                    sample_id = int(request.get("sample_id", -1)) if "request" in locals() else -1
-                    stage_id = int(request.get("stage_id", -1)) if "request" in locals() else -1
+                    request_id = (
+                        request.get("request_id", "unknown")
+                        if "request" in locals()
+                        else "unknown"
+                    )
+                    sample_id = (
+                        int(request.get("sample_id", -1))
+                        if "request" in locals()
+                        else -1
+                    )
+                    stage_id = (
+                        int(request.get("stage_id", -1))
+                        if "request" in locals()
+                        else -1
+                    )
 
                     traceback.print_exc()
                     response = make_error_response(
@@ -153,7 +183,9 @@ def main() -> None:
                     )
 
                 send_message(conn, response)
-                print(f"[worker_server] handled request from {addr} status={response.get('status')}")
+                print(
+                    f"[worker_server] handled request from {addr} status={response.get('status')}"
+                )
     finally:
         server.close()
 

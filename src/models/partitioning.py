@@ -33,13 +33,13 @@ class PartitionOutput:
     compute_time_sec: float
 
 
-class ResNetEEPartition1(nn.Module):
+class ResNetEE2WayPartition0(nn.Module):
     """
-    Worker 1 partition:
+    2-worker topology, stage 0:
       conv1 -> maxpool -> layer0 -> exit0
                         -> layer1 -> exit1
 
-    If neither exit fires, it forwards activation after layer1.
+    If neither exit fires, forward activation after layer1.
     """
 
     def __init__(self, full_model: ResNetEE18):
@@ -89,14 +89,135 @@ class ResNetEEPartition1(nn.Module):
         )
 
 
-class ResNetEEPartition2(nn.Module):
+class ResNetEE2WayPartition1(nn.Module):
     """
-    Worker 2 partition:
+    2-worker topology, stage 1:
       input activation(after layer1) -> layer2 -> exit2
                                      -> layer3 -> avgpool -> fc(final)
+    """
 
-    If exit2 fires, return early-exit result.
-    Otherwise return final output with exit_id=3.
+    def __init__(self, full_model: ResNetEE18):
+        super().__init__()
+        self.layer2 = full_model.layer2
+        self.layer3 = full_model.layer3
+        self.exit2 = full_model.exit2
+        self.avgpool = full_model.avgpool
+        self.fc = full_model.fc
+        self.confidence_threshold = float(full_model.confidence_threshold)
+
+    def forward(self, x: torch.Tensor) -> PartitionOutput:
+        start = time.time()
+
+        x2 = self.layer2(x)
+        out2 = self.exit2(x2)
+        if _entropy_confident(out2, self.confidence_threshold):
+            return PartitionOutput(
+                status="exited",
+                exit_id=2,
+                logits=out2,
+                activation=None,
+                compute_time_sec=time.time() - start,
+            )
+
+        x3 = self.layer3(x2)
+        xf = self.avgpool(x3)
+        xf = torch.flatten(xf, 1)
+        out_final = self.fc(xf)
+
+        return PartitionOutput(
+            status="completed",
+            exit_id=3,
+            logits=out_final,
+            activation=None,
+            compute_time_sec=time.time() - start,
+        )
+
+
+class ResNetEE3WayPartition0(nn.Module):
+    """
+    3-worker topology, stage 0:
+      conv1 -> maxpool -> layer0 -> exit0
+
+    If exit0 does not fire, forward activation after layer0.
+    """
+
+    def __init__(self, full_model: ResNetEE18):
+        super().__init__()
+        self.conv1 = full_model.conv1
+        self.maxpool = full_model.maxpool
+        self.layer0 = full_model.layer0
+        self.exit0 = full_model.exit0
+        self.confidence_threshold = float(full_model.confidence_threshold)
+
+    def forward(self, x: torch.Tensor) -> PartitionOutput:
+        start = time.time()
+
+        x = self.conv1(x)
+        x = self.maxpool(x)
+        x0 = self.layer0(x)
+
+        out0 = self.exit0(x0)
+        if _entropy_confident(out0, self.confidence_threshold):
+            return PartitionOutput(
+                status="exited",
+                exit_id=0,
+                logits=out0,
+                activation=None,
+                compute_time_sec=time.time() - start,
+            )
+
+        return PartitionOutput(
+            status="forward",
+            exit_id=None,
+            logits=None,
+            activation=x0,
+            compute_time_sec=time.time() - start,
+        )
+
+
+class ResNetEE3WayPartition1(nn.Module):
+    """
+    3-worker topology, stage 1:
+      input activation(after layer0) -> layer1 -> exit1
+
+    If exit1 does not fire, forward activation after layer1.
+    """
+
+    def __init__(self, full_model: ResNetEE18):
+        super().__init__()
+        self.layer1 = full_model.layer1
+        self.exit1 = full_model.exit1
+        self.confidence_threshold = float(full_model.confidence_threshold)
+
+    def forward(self, x: torch.Tensor) -> PartitionOutput:
+        start = time.time()
+
+        x1 = self.layer1(x)
+        out1 = self.exit1(x1)
+
+        if _entropy_confident(out1, self.confidence_threshold):
+            return PartitionOutput(
+                status="exited",
+                exit_id=1,
+                logits=out1,
+                activation=None,
+                compute_time_sec=time.time() - start,
+            )
+
+        return PartitionOutput(
+            status="forward",
+            exit_id=None,
+            logits=None,
+            activation=x1,
+            compute_time_sec=time.time() - start,
+        )
+
+
+class ResNetEE3WayPartition2(nn.Module):
+    """
+    3-worker topology, stage 2:
+      input activation(after layer1) -> layer2 -> exit2
+                                     -> layer3 -> avgpool -> fc(final)
     """
 
     def __init__(self, full_model: ResNetEE18):
@@ -190,6 +311,7 @@ def build_full_ee_resnet18(
 
 def build_partition_module(
     partition_id: int,
+    num_partitions: int,
     model_cfg: dict[str, Any],
     dataset_cfg: dict[str, Any],
     repo_root: str,
@@ -197,6 +319,10 @@ def build_partition_module(
 ) -> nn.Module:
     """
     Construct the local partition module for a worker.
+
+    Supported topologies:
+      - 2 workers
+      - 3 workers
     """
     full_model = build_full_ee_resnet18(
         model_cfg=model_cfg,
@@ -205,10 +331,20 @@ def build_partition_module(
         device=device,
     )
 
-    if partition_id == 0:
-        return ResNetEEPartition1(full_model).to(device).eval()
+    if num_partitions == 2:
+        if partition_id == 0:
+            return ResNetEE2WayPartition0(full_model).to(device).eval()
+        if partition_id == 1:
+            return ResNetEE2WayPartition1(full_model).to(device).eval()
+        raise ValueError(f"Unsupported partition_id={partition_id} for 2-worker topology.")
 
-    if partition_id == 1:
-        return ResNetEEPartition2(full_model).to(device).eval()
+    if num_partitions == 3:
+        if partition_id == 0:
+            return ResNetEE3WayPartition0(full_model).to(device).eval()
+        if partition_id == 1:
+            return ResNetEE3WayPartition1(full_model).to(device).eval()
+        if partition_id == 2:
+            return ResNetEE3WayPartition2(full_model).to(device).eval()
+        raise ValueError(f"Unsupported partition_id={partition_id} for 3-worker topology.")
 
-    raise ValueError(f"Unsupported partition_id={partition_id}. Expected 0 or 1.")
+    raise ValueError(f"Unsupported num_partitions={num_partitions}. Expected 2 or 3.")
