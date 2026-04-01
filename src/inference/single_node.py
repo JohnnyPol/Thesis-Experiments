@@ -11,7 +11,11 @@ from codecarbon import EmissionsTracker
 
 from src.data.loaders import data_loader
 from src.metrics.accuracy import compute_accuracy, update_correct_total
-from src.metrics.exits import initialize_exit_counts, summarize_exit_counts, update_exit_counts
+from src.metrics.exits import (
+    initialize_exit_counts,
+    summarize_exit_counts,
+    update_exit_counts,
+)
 from src.metrics.latency import (
     compute_latency_stats,
     compute_throughput,
@@ -128,6 +132,8 @@ def evaluate_single_node(
     device: torch.device | str = "cpu",
     network_interface: str | None = None,
     warmup_samples: int = 0,
+    max_samples: int | None = 1,  # infer only 1 sample for now
+    show_progress: bool = True,
 ) -> tuple[dict, pd.DataFrame]:
     """
     Evaluate either a baseline or an early-exit model on a single node.
@@ -150,6 +156,15 @@ def evaluate_single_node(
         num_workers=num_workers,
         dataset_config=dataset_config,
     )
+
+    dataset_size = len(test_loader.dataset) if hasattr(test_loader, "dataset") else None # type: ignore
+    target_total = (
+        min(max_samples, dataset_size)
+        if (max_samples is not None and dataset_size is not None)
+        else max_samples
+    )
+    if target_total is None:
+        target_total = dataset_size
 
     correct = 0
     total = 0
@@ -178,13 +193,21 @@ def evaluate_single_node(
 
     net_before = read_network_bytes(interface=network_interface)
 
-    tracker = EmissionsTracker(measure_power_secs=1)
+    # Silence CodeCarbon logs
+    tracker = EmissionsTracker(
+        measure_power_secs=1,
+        log_level="critical",
+    )
     tracker.start()
+    inferred_samples = 0
     experiment_start = time.time()
 
     with torch.no_grad():
         sample_index = 0
         for images, labels in test_loader:
+            if max_samples is not None and inferred_samples >= max_samples:
+                break
+
             images = images.to(device)
             labels = labels.to(device)
 
@@ -219,11 +242,28 @@ def evaluate_single_node(
             per_sample_rows.append(row)
             sample_index += 1
 
+            inferred_samples += 1
+
+            if show_progress:
+                if target_total is not None:
+                    print(
+                        f"\rInferred {inferred_samples}/{target_total} samples",
+                        end="",
+                        flush=True,
+                    )
+                else:
+                    print(f"\rInferred {inferred_samples} samples", end="", flush=True)
+
+        if show_progress:
+            print()
+
     experiment_end = time.time()
     tracker.stop()
     net_after = read_network_bytes(interface=network_interface)
 
-    total_inference_time_sec = compute_total_inference_time(experiment_start, experiment_end)
+    total_inference_time_sec = compute_total_inference_time(
+        experiment_start, experiment_end
+    )
     latency_stats = compute_latency_stats(latencies)
     throughput = compute_throughput(total, total_inference_time_sec)
     node_utilization = compute_node_utilization(
@@ -351,6 +391,7 @@ def main():
         device=device,
         network_interface=network_interface,
         warmup_samples=warmup_samples,
+        max_samples=1,
     )
 
     summary["experiment_id"] = experiment_cfg.get("experiment", {}).get("id")

@@ -3,7 +3,6 @@ torchvision
 codecarbon
 numpy
 pandas
-seaborn
 matplotlib
 einops
 tqdm

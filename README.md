@@ -46,3 +46,9 @@ What we could do that remains:
     └── docker/
         └── Dockerfile
 ```
+
+Steps after cloining:
+- git clone ...
+- python -m venv venv
+- source venv/bin/activate
+- pip install -r requirements.txt
