@@ -15,7 +15,7 @@ workers:
   - worker_id: worker1
     partition_id: 0
     host: 0.0.0.0
-    connect_host: 192.168.1.101
+    connect_host: 192.168.0.102
     port: 9101
     device: cpu
     next_worker_id: worker2
@@ -23,7 +23,7 @@ workers:
   - worker_id: worker2
     partition_id: 1
     host: 0.0.0.0
-    connect_host: 192.168.1.102
+    connect_host: 192.168.0.104
     port: 9102
     device: cpu
     next_worker_id: null
