@@ -90,6 +90,8 @@ def evaluate_distributed_ee(
     data_dir: str,
     batch_size: int,
     warmup_samples: int,
+    max_samples: int | None = None,
+    show_progress: bool = True,
 ) -> tuple[dict[str, Any], pd.DataFrame]:
     if batch_size != 1:
         raise ValueError(
@@ -114,6 +116,17 @@ def evaluate_distributed_ee(
         num_workers=num_workers,
         dataset_config=dataset_cfg,
     )
+
+    dataset_size = (
+        len(test_loader.dataset) if hasattr(test_loader, "dataset") else None  # type: ignore
+    )
+    target_total = (
+        min(max_samples, dataset_size)
+        if (max_samples is not None and dataset_size is not None)
+        else max_samples
+    )
+    if target_total is None:
+        target_total = dataset_size
 
     timeout_sec = float(system_cfg.get("runtime", {}).get("request_timeout_sec", 30.0))
 
@@ -157,13 +170,20 @@ def evaluate_distributed_ee(
 
     net_before = read_network_bytes(interface=network_interface)
 
-    tracker = EmissionsTracker(measure_power_secs=1)
+    tracker = EmissionsTracker(
+        measure_power_secs=1,
+        log_level="critical",
+    )
     tracker.start()
     experiment_start = time.time()
+    inferred_samples = 0
 
     with torch.no_grad():
         sample_index = 0
         for images, labels in test_loader:
+            if max_samples is not None and inferred_samples >= max_samples:
+                break
+
             labels = labels.cpu()
 
             start = time.time()
@@ -237,8 +257,23 @@ def evaluate_distributed_ee(
 
             per_sample_rows.append(row)
             sample_index += 1
+            inferred_samples += 1
+
+            if show_progress:
+                if target_total is not None:
+                    print(
+                        f"\rInferred {inferred_samples}/{target_total} samples",
+                        end="",
+                        flush=True,
+                    )
+                else:
+                    print(f"\rInferred {inferred_samples} samples", end="", flush=True)
+
+        if show_progress:
+            print()
 
     experiment_end = time.time()
+    tracker.stop()
     net_after = read_network_bytes(interface=network_interface)
 
     total_inference_time_sec = compute_total_inference_time(
