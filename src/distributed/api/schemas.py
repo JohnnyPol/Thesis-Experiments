@@ -86,10 +86,7 @@ class InferenceRequestMetadata(BaseModel):
 class TerminalInferenceResponse(BaseModel):
     protocol_version: str = Field(default=PROTOCOL_VERSION)
 
-    status: Literal[
-        RESPONSE_STATUS_EXITED,
-        RESPONSE_STATUS_COMPLETED,
-    ]
+    status: Literal["exited", "completed"]
 
     request_id: str
     sample_id: int = Field(..., ge=0)
@@ -149,7 +146,7 @@ class TerminalInferenceResponse(BaseModel):
 class ErrorResponse(BaseModel):
     protocol_version: str = Field(default=PROTOCOL_VERSION)
 
-    status: Literal[RESPONSE_STATUS_ERROR]
+    status: Literal["error"]
 
     request_id: str
     sample_id: int = Field(default=-1)
