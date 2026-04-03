@@ -4,10 +4,11 @@ codecarbon
 numpy
 pandas
 matplotlib
-einops
 tqdm
 opencv-python
 scikit-image
 scipy
 scikit-learn
 PyYAML
+fastapi
+uvicorn

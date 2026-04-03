@@ -11,8 +11,8 @@ import torch
 from codecarbon import EmissionsTracker
 
 from src.data.loaders import data_loader
-from src.inference.partition_runner import run_multi_stage_inference
-from src.metrics.accuracy import compute_accuracy, update_correct_total
+from src.inference.partition_runner import run_chained_inference
+from src.metrics.accuracy import compute_accuracy
 from src.metrics.exits import (
     initialize_exit_counts,
     summarize_exit_counts,
@@ -104,9 +104,9 @@ def evaluate_distributed_ee(
             f"Unsupported number of workers/stages: {num_stages}. Expected 2 or 3."
         )
 
+    entry_worker_cfg = worker_cfgs[0]
     num_workers = dataset_cfg.get("loader", {}).get("num_workers", 0)
 
-    # Load test dataset for evaluation
     test_loader = data_loader(
         data_dir=data_dir,
         batch_size=batch_size,
@@ -121,10 +121,10 @@ def evaluate_distributed_ee(
         warmup_count = 0
         with torch.no_grad():
             for images, _ in test_loader:
-                _ = run_multi_stage_inference(
+                _ = run_chained_inference(
                     image_tensor=images.cpu(),
                     sample_id=warmup_count,
-                    worker_cfgs=worker_cfgs,
+                    entry_worker_cfg=entry_worker_cfg,
                     timeout_sec=timeout_sec,
                 )
                 warmup_count += images.size(0)
@@ -157,8 +157,8 @@ def evaluate_distributed_ee(
 
     net_before = read_network_bytes(interface=network_interface)
 
-    # tracker = EmissionsTracker(measure_power_secs=1)
-    # tracker.start()
+    tracker = EmissionsTracker(measure_power_secs=1)
+    tracker.start()
     experiment_start = time.time()
 
     with torch.no_grad():
@@ -167,15 +167,15 @@ def evaluate_distributed_ee(
             labels = labels.cpu()
 
             start = time.time()
-            distributed_output = run_multi_stage_inference(
+            distributed_output = run_chained_inference(
                 image_tensor=images.cpu(),
                 sample_id=sample_index,
-                worker_cfgs=worker_cfgs,
+                entry_worker_cfg=entry_worker_cfg,
                 timeout_sec=timeout_sec,
             )
             end = time.time()
 
-            logits = distributed_output["logits"]
+            predicted_class = int(distributed_output["predicted_class"])
             exit_id = int(distributed_output["exit_id"])
 
             latency = end - start
@@ -202,21 +202,25 @@ def evaluate_distributed_ee(
 
             update_exit_counts(exit_counts, exit_id)
 
-            predicted = logits.argmax(dim=1).cpu()
-            correct, total = update_correct_total(predicted, labels, correct, total)
+            label_value = int(labels[0].item())
+            is_correct = int(predicted_class == label_value)
+            correct += is_correct
+            total += 1
 
             row: dict[str, Any] = {
                 "sample_index": sample_index,
                 "batch_size": int(labels.size(0)),
                 "latency_sec": float(latency),
-                "predicted_class": int(predicted[0].item()),
-                "true_class": int(labels[0].item()),
-                "correct": int((predicted == labels).sum().item()),
+                "predicted_class": predicted_class,
+                "true_class": label_value,
+                "correct": is_correct,
                 "exit_id": exit_id,
+                "confidence": distributed_output.get("confidence"),
                 "protocol_bytes": int(distributed_output["protocol_bytes"]),
                 "remote_compute_time_sec": float(
                     distributed_output["remote_compute_time_sec"]
                 ),
+                "path": "->".join(distributed_output.get("path", [])),
             }
 
             for worker_cfg in worker_cfgs:
@@ -235,7 +239,6 @@ def evaluate_distributed_ee(
             sample_index += 1
 
     experiment_end = time.time()
-    # tracker.stop()
     net_after = read_network_bytes(interface=network_interface)
 
     total_inference_time_sec = compute_total_inference_time(
@@ -330,8 +333,8 @@ def main() -> None:
     summary["model_name"] = model_cfg.get("name")
     summary["system_name"] = system_cfg.get("system_name")
     summary["weights_path"] = weights_path
-    summary["data_dir"] = data_dir
-    summary["output_dir"] = output_dir
+    summary["data_dir"] = str(data_dir)
+    summary["output_dir"] = str(output_dir)
 
     save_results(str(output_dir), summary, per_sample_df, bundle)
     print(json.dumps(summary, indent=2))
