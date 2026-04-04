@@ -11,3 +11,4 @@ PyYAML
 fastapi
 uvicorn
 python-multipart
+requests
