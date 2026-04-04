@@ -23,7 +23,7 @@ workers:
   - worker_id: jetson
     partition_id: 1
     host: 0.0.0.0
-    connect_host: 192.168.1.110
+    connect_host: 147.102.19.151
     port: 9103
     device: gpu
     next_worker_id: null
