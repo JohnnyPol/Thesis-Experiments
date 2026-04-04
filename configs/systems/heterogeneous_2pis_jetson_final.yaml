@@ -1,4 +1,4 @@
-system_name: heterogeneous_jetson_final
+system_name: heterogeneous_2pis_jetson_final
 
 runtime:
   request_timeout_sec: 30.0
@@ -9,6 +9,7 @@ master:
 
 pipeline_order:
   - worker1
+  - worker2
   - jetson
 
 workers:
@@ -18,10 +19,18 @@ workers:
     connect_host: 192.168.0.102
     port: 9101
     device: cpu
+    next_worker_id: worker2
+
+  - worker_id: worker2
+    partition_id: 1
+    host: 0.0.0.0
+    connect_host: 192.168.0.104
+    port: 9102
+    device: cpu
     next_worker_id: jetson
 
   - worker_id: jetson
-    partition_id: 1
+    partition_id: 2
     host: 0.0.0.0
     connect_host: 192.168.1.110
     port: 9103

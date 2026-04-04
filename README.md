@@ -7,7 +7,7 @@ This README focuses on the single-node part of Experiment 1:
 - `exp1_1`: baseline ResNet-18 on one node
 - `exp1_2`: early-exit ResNet-18 on one node
 
-The distributed runs (`exp1_3`, `exp1_4`, `exp1_5`) build on the same model and config structure, but they are not the main focus of this document.
+The distributed runs (`exp1_3`, `exp1_4`, `exp1_5`, `exp1_6`) build on the same model and config structure, but they are not the main focus of this document.
 
 ## What This Experiment Measures
 

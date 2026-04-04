@@ -1,7 +1,7 @@
 experiment:
   id: exp1_5
   name: ee_heterogeneous
-  description: Early-exit ResNet-18 distributed across Raspberry Pi workers with a Jetson node in the final partition.
+  description: Early-exit ResNet-18 distributed across one Raspberry Pi and one Jetson Nano as the final worker.
 
 config_refs:
   dataset: configs/datasets/cifar10.yaml
@@ -18,9 +18,7 @@ partitioning:
   node_1:
     stages: [conv1, maxpool, layer0, exit0, layer1, exit1]
   node_2:
-    stages: [layer2, exit2]
-  node_3:
-    stages: [layer3, avgpool, fc]
+    stages: [layer2, exit2, layer3, avgpool, fc]
 
 output:
-  dir: ./results/exp1_single_model/04_heterogeneous_nodes/run_001
+  dir: ./results/exp1_single_model/05_heterogeneous_pi_jetson_2workers/run_001

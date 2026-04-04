@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_PATH="${1:-configs/experiments/exp1_5_ee_heterogeneous.yaml}"
+CONFIG_PATH="${1:-configs/experiments/exp1_6_ee_heterogeneous_3nodes.yaml}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 export PYTHONPATH="$REPO_ROOT"
 
-echo "[run_exp1_5] repo_root=$REPO_ROOT"
-echo "[run_exp1_5] config=$CONFIG_PATH"
+echo "[run_exp1_6] repo_root=$REPO_ROOT"
+echo "[run_exp1_6] config=$CONFIG_PATH"
 
 mapfile -t WORKER_ENDPOINTS < <(
 python - <<'PY' "$CONFIG_PATH"
@@ -52,15 +52,15 @@ PY
 )
 
 if [[ ${#WORKER_ENDPOINTS[@]} -eq 0 ]]; then
-  echo "[run_exp1_5] no workers found in system config"
+  echo "[run_exp1_6] no workers found in system config"
   exit 1
 fi
 
 for entry in "${WORKER_ENDPOINTS[@]}"; do
   read -r WORKER_ID WORKER_HOST WORKER_PORT <<< "$entry"
-  echo "[run_exp1_5] checking ${WORKER_ID} health at ${WORKER_HOST}:${WORKER_PORT}..."
+  echo "[run_exp1_6] checking ${WORKER_ID} health at ${WORKER_HOST}:${WORKER_PORT}..."
   curl --fail --silent "http://${WORKER_HOST}:${WORKER_PORT}/health" >/dev/null
-  echo "[run_exp1_5] ${WORKER_ID} is reachable"
+  echo "[run_exp1_6] ${WORKER_ID} is reachable"
 done
 
 python -m src.distributed.master_client \

@@ -9,6 +9,13 @@ from src.models.partitioning import build_partition_module
 from src.distributed.runtime.worker_monitoring import WorkerEmissionsMonitor
 
 
+def _resolve_device(device_name: str | None) -> torch.device:
+    normalized = str(device_name or "cpu").strip().lower()
+    if normalized == "gpu":
+        normalized = "cuda"
+    return torch.device(normalized)
+
+
 def find_worker_cfg(system_cfg: dict[str, Any], worker_id: str) -> dict[str, Any]:
     for worker_cfg in system_cfg.get("workers", []):
         if str(worker_cfg.get("worker_id")) == str(worker_id):
@@ -59,7 +66,7 @@ def build_worker_runtime(
 
     partition_id = int(worker_cfg["partition_id"])
     num_partitions = len(system_cfg.get("workers", []))
-    device = torch.device(worker_cfg.get("device", "cpu"))
+    device = _resolve_device(worker_cfg.get("device", "cpu"))
     host = str(worker_cfg.get("host"))
     port = int(worker_cfg["port"])
     next_worker_id = worker_cfg.get("next_worker_id")
