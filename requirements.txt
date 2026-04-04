@@ -1,5 +1,3 @@
-torch
-torchvision
 codecarbon
 numpy
 pandas
@@ -12,3 +10,4 @@ scikit-learn
 PyYAML
 fastapi
 uvicorn
+python-multipart

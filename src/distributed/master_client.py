@@ -11,6 +11,7 @@ import torch
 from codecarbon import EmissionsTracker
 
 from src.data.loaders import data_loader
+from src.distributed.client.fastapi_client import start_monitoring, stop_monitoring
 from src.inference.partition_runner import run_chained_inference
 from src.metrics.accuracy import compute_accuracy
 from src.metrics.exits import (
@@ -64,6 +65,37 @@ def _make_stage_metric_maps(
     worker_cfgs: list[dict[str, Any]], default_value: float | int
 ) -> dict[str, float | int]:
     return {str(worker_cfg["worker_id"]): default_value for worker_cfg in worker_cfgs}
+
+
+def _start_worker_monitors(
+    worker_cfgs: list[dict[str, Any]],
+    timeout_sec: float,
+) -> None:
+    for worker_cfg in worker_cfgs:
+        start_monitoring(worker_cfg=worker_cfg, timeout_sec=timeout_sec)
+
+
+def _stop_worker_monitors(
+    worker_cfgs: list[dict[str, Any]],
+    timeout_sec: float,
+) -> dict[str, dict[str, float | None]]:
+    monitoring_results: dict[str, dict[str, float | None]] = {}
+    for worker_cfg in worker_cfgs:
+        worker_id = str(worker_cfg["worker_id"])
+        response = stop_monitoring(worker_cfg=worker_cfg, timeout_sec=timeout_sec)
+        monitoring_results[worker_id] = {
+            "carbon_kg": (
+                float(response["carbon_kg"])
+                if response.get("carbon_kg") is not None
+                else None
+            ),
+            "energy_kWh": (
+                float(response["energy_kWh"])
+                if response.get("energy_kWh") is not None
+                else None
+            ),
+        }
+    return monitoring_results
 
 
 def save_results(
@@ -174,106 +206,119 @@ def evaluate_distributed_ee(
         measure_power_secs=1,
         log_level="critical",
     )
+    worker_monitoring_results: dict[str, dict[str, float | None]] = {}
+
+    _start_worker_monitors(worker_cfgs=worker_cfgs, timeout_sec=timeout_sec)
     tracker.start()
     experiment_start = time.time()
     inferred_samples = 0
 
-    with torch.no_grad():
-        sample_index = 0
-        for images, labels in test_loader:
-            if max_samples is not None and inferred_samples >= max_samples:
-                break
+    try:
+        with torch.no_grad():
+            sample_index = 0
+            for images, labels in test_loader:
+                if max_samples is not None and inferred_samples >= max_samples:
+                    break
 
-            labels = labels.cpu()
+                labels = labels.cpu()
 
-            start = time.time()
-            distributed_output = run_chained_inference(
-                image_tensor=images.cpu(),
-                sample_id=sample_index,
-                entry_worker_cfg=entry_worker_cfg,
-                timeout_sec=timeout_sec,
-            )
-            end = time.time()
-
-            predicted_class = int(distributed_output["predicted_class"])
-            exit_id = int(distributed_output["exit_id"])
-
-            latency = end - start
-            latencies.append(latency)
-
-            protocol_bytes_total += int(distributed_output["protocol_bytes"])
-            remote_compute_total += float(distributed_output["remote_compute_time_sec"])
-
-            worker_compute_times = distributed_output["worker_compute_times"]
-            stage_request_bytes = distributed_output["stage_request_bytes"]
-            stage_response_bytes = distributed_output["stage_response_bytes"]
-
-            for worker_cfg in worker_cfgs:
-                worker_id = str(worker_cfg["worker_id"])
-                worker_compute_totals[worker_id] = float(
-                    worker_compute_totals[worker_id]
-                ) + float(worker_compute_times.get(worker_id, 0.0))
-                stage_request_totals[worker_id] = int(
-                    stage_request_totals[worker_id]
-                ) + int(stage_request_bytes.get(worker_id, 0))
-                stage_response_totals[worker_id] = int(
-                    stage_response_totals[worker_id]
-                ) + int(stage_response_bytes.get(worker_id, 0))
-
-            update_exit_counts(exit_counts, exit_id)
-
-            label_value = int(labels[0].item())
-            is_correct = int(predicted_class == label_value)
-            correct += is_correct
-            total += 1
-
-            row: dict[str, Any] = {
-                "sample_index": sample_index,
-                "batch_size": int(labels.size(0)),
-                "latency_sec": float(latency),
-                "predicted_class": predicted_class,
-                "true_class": label_value,
-                "correct": is_correct,
-                "exit_id": exit_id,
-                "confidence": distributed_output.get("confidence"),
-                "protocol_bytes": int(distributed_output["protocol_bytes"]),
-                "remote_compute_time_sec": float(
-                    distributed_output["remote_compute_time_sec"]
-                ),
-                "path": "->".join(distributed_output.get("path", [])),
-            }
-
-            for worker_cfg in worker_cfgs:
-                worker_id = str(worker_cfg["worker_id"])
-                row[f"{worker_id}_compute_time_sec"] = float(
-                    worker_compute_times.get(worker_id, 0.0)
+                start = time.time()
+                distributed_output = run_chained_inference(
+                    image_tensor=images.cpu(),
+                    sample_id=sample_index,
+                    entry_worker_cfg=entry_worker_cfg,
+                    timeout_sec=timeout_sec,
                 )
-                row[f"{worker_id}_request_bytes"] = int(
-                    stage_request_bytes.get(worker_id, 0)
-                )
-                row[f"{worker_id}_response_bytes"] = int(
-                    stage_response_bytes.get(worker_id, 0)
-                )
+                end = time.time()
 
-            per_sample_rows.append(row)
-            sample_index += 1
-            inferred_samples += 1
+                predicted_class = int(distributed_output["predicted_class"])
+                exit_id = int(distributed_output["exit_id"])
+
+                latency = end - start
+                latencies.append(latency)
+
+                protocol_bytes_total += int(distributed_output["protocol_bytes"])
+                remote_compute_total += float(distributed_output["remote_compute_time_sec"])
+
+                worker_compute_times = distributed_output["worker_compute_times"]
+                stage_request_bytes = distributed_output["stage_request_bytes"]
+                stage_response_bytes = distributed_output["stage_response_bytes"]
+
+                for worker_cfg in worker_cfgs:
+                    worker_id = str(worker_cfg["worker_id"])
+                    worker_compute_totals[worker_id] = float(
+                        worker_compute_totals[worker_id]
+                    ) + float(worker_compute_times.get(worker_id, 0.0))
+                    stage_request_totals[worker_id] = int(
+                        stage_request_totals[worker_id]
+                    ) + int(stage_request_bytes.get(worker_id, 0))
+                    stage_response_totals[worker_id] = int(
+                        stage_response_totals[worker_id]
+                    ) + int(stage_response_bytes.get(worker_id, 0))
+
+                update_exit_counts(exit_counts, exit_id)
+
+                label_value = int(labels[0].item())
+                is_correct = int(predicted_class == label_value)
+                correct += is_correct
+                total += 1
+
+                row: dict[str, Any] = {
+                    "sample_index": sample_index,
+                    "batch_size": int(labels.size(0)),
+                    "latency_sec": float(latency),
+                    "predicted_class": predicted_class,
+                    "true_class": label_value,
+                    "correct": is_correct,
+                    "exit_id": exit_id,
+                    "confidence": distributed_output.get("confidence"),
+                    "protocol_bytes": int(distributed_output["protocol_bytes"]),
+                    "remote_compute_time_sec": float(
+                        distributed_output["remote_compute_time_sec"]
+                    ),
+                    "path": "->".join(distributed_output.get("path", [])),
+                }
+
+                for worker_cfg in worker_cfgs:
+                    worker_id = str(worker_cfg["worker_id"])
+                    row[f"{worker_id}_compute_time_sec"] = float(
+                        worker_compute_times.get(worker_id, 0.0)
+                    )
+                    row[f"{worker_id}_request_bytes"] = int(
+                        stage_request_bytes.get(worker_id, 0)
+                    )
+                    row[f"{worker_id}_response_bytes"] = int(
+                        stage_response_bytes.get(worker_id, 0)
+                    )
+
+                per_sample_rows.append(row)
+                sample_index += 1
+                inferred_samples += 1
+
+                if show_progress:
+                    if target_total is not None:
+                        print(
+                            f"\rInferred {inferred_samples}/{target_total} samples",
+                            end="",
+                            flush=True,
+                        )
+                    else:
+                        print(
+                            f"\rInferred {inferred_samples} samples",
+                            end="",
+                            flush=True,
+                        )
 
             if show_progress:
-                if target_total is not None:
-                    print(
-                        f"\rInferred {inferred_samples}/{target_total} samples",
-                        end="",
-                        flush=True,
-                    )
-                else:
-                    print(f"\rInferred {inferred_samples} samples", end="", flush=True)
+                print()
+    finally:
+        experiment_end = time.time()
+        tracker.stop()
+        worker_monitoring_results = _stop_worker_monitors(
+            worker_cfgs=worker_cfgs,
+            timeout_sec=timeout_sec,
+        )
 
-        if show_progress:
-            print()
-
-    experiment_end = time.time()
-    tracker.stop()
     net_after = read_network_bytes(interface=network_interface)
 
     total_inference_time_sec = compute_total_inference_time(
@@ -317,11 +362,17 @@ def evaluate_distributed_ee(
     results.update(latency_stats)
     results.update(summarize_exit_counts(exit_counts, total))
 
+    worker_carbon_total = 0.0
+    worker_energy_total = 0.0
+
     for worker_cfg in worker_cfgs:
         worker_id = str(worker_cfg["worker_id"])
         compute_total = float(worker_compute_totals[worker_id])
         req_total = int(stage_request_totals[worker_id])
         resp_total = int(stage_response_totals[worker_id])
+        worker_monitoring = worker_monitoring_results.get(worker_id, {})
+        worker_carbon_kg = worker_monitoring.get("carbon_kg")
+        worker_energy_kwh = worker_monitoring.get("energy_kWh")
 
         results[f"{worker_id}_compute_time_total_sec"] = compute_total
         results[f"{worker_id}_compute_time_avg_sec"] = (
@@ -329,6 +380,22 @@ def evaluate_distributed_ee(
         )
         results[f"{worker_id}_request_bytes_total"] = req_total
         results[f"{worker_id}_response_bytes_total"] = resp_total
+        results[f"{worker_id}_carbon_kg"] = worker_carbon_kg
+        results[f"{worker_id}_energy_kWh"] = worker_energy_kwh
+
+        if worker_carbon_kg is not None:
+            worker_carbon_total += float(worker_carbon_kg)
+        if worker_energy_kwh is not None:
+            worker_energy_total += float(worker_energy_kwh)
+
+    results["workers_carbon_kg_total"] = float(worker_carbon_total)
+    results["workers_energy_kWh_total"] = float(worker_energy_total)
+    results["system_carbon_kg_total"] = float(
+        worker_carbon_total + (float(carbon_kg) if carbon_kg is not None else 0.0)
+    )
+    results["system_energy_kWh_total"] = float(
+        worker_energy_total + (float(energy_kwh) if energy_kwh is not None else 0.0)
+    )
 
     per_sample_df = pd.DataFrame(per_sample_rows)
     return results, per_sample_df

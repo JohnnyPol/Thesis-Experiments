@@ -52,3 +52,18 @@ Steps after cloining:
 - python -m venv venv
 - source venv/bin/activate
 - pip install -r requirements.txt
+
+for torch and torchvision use the commands:
+```bash
+python -m pip install \
+  --index-url https://download.pytorch.org/whl/cpu \
+  --extra-index-url https://www.piwheels.org/simple \
+  torch
+```
+
+and 
+```bash
+pip install torchvision --no-cache-dir \
+  --index-url https://download.pytorch.org/whl/cpu \
+  --extra-index-url https://www.piwheels.org/simple
+```

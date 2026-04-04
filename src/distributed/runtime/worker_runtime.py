@@ -6,6 +6,7 @@ from typing import Any
 import torch
 
 from src.models.partitioning import build_partition_module
+from src.distributed.runtime.worker_monitoring import WorkerEmissionsMonitor
 
 
 def find_worker_cfg(system_cfg: dict[str, Any], worker_id: str) -> dict[str, Any]:
@@ -39,6 +40,7 @@ class WorkerRuntime:
     partition_module: torch.nn.Module
     model_name: str | None
     exit_policy: str | None
+    emissions_monitor: WorkerEmissionsMonitor
 
     @property
     def is_final_stage(self) -> bool:
@@ -93,4 +95,5 @@ def build_worker_runtime(
         partition_module=partition_module,
         model_name=model_name,
         exit_policy=exit_policy,
+        emissions_monitor=WorkerEmissionsMonitor(),
     )

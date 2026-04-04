@@ -179,3 +179,17 @@ class WorkerInfoResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     worker_id: str
+
+
+class WorkerMonitoringStartResponse(BaseModel):
+    status: Literal["started"]
+    worker_id: str
+    tracker_active: bool
+
+
+class WorkerMonitoringStopResponse(BaseModel):
+    status: Literal["stopped"]
+    worker_id: str
+    tracker_active: bool
+    carbon_kg: float | None = None
+    energy_kWh: float | None = None

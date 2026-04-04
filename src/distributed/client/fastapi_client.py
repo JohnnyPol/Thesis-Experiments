@@ -87,6 +87,26 @@ def get_info(
     return response.json()
 
 
+def start_monitoring(
+    worker_cfg: dict[str, Any],
+    timeout_sec: float = DEFAULT_TIMEOUT_SEC,
+) -> dict[str, Any]:
+    url = f"{_worker_base_url(worker_cfg)}/monitoring/start"
+    response = requests.post(url, timeout=timeout_sec)
+    response.raise_for_status()
+    return response.json()
+
+
+def stop_monitoring(
+    worker_cfg: dict[str, Any],
+    timeout_sec: float = DEFAULT_TIMEOUT_SEC,
+) -> dict[str, Any]:
+    url = f"{_worker_base_url(worker_cfg)}/monitoring/stop"
+    response = requests.post(url, timeout=timeout_sec)
+    response.raise_for_status()
+    return response.json()
+
+
 def _estimate_request_bytes(
     url: str,
     metadata_json: str,

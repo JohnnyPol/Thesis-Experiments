@@ -11,6 +11,8 @@ from src.distributed.api.schemas import (
     HealthResponse,
     InferenceRequestMetadata,
     TerminalInferenceResponse,
+    WorkerMonitoringStartResponse,
+    WorkerMonitoringStopResponse,
     WorkerInfoResponse,
 )
 from src.distributed.protocol.constants import METADATA_FORM_FIELD, TENSOR_FORM_FIELD
@@ -38,6 +40,26 @@ def create_router(runtime: WorkerRuntime) -> APIRouter:
             next_worker_id=runtime.next_worker_id,
             model_name=runtime.model_name,
             exit_policy=runtime.exit_policy,
+        )
+
+    @router.post("/monitoring/start", response_model=WorkerMonitoringStartResponse)
+    def start_monitoring() -> WorkerMonitoringStartResponse:
+        runtime.emissions_monitor.start()
+        return WorkerMonitoringStartResponse(
+            status="started",
+            worker_id=runtime.worker_id,
+            tracker_active=runtime.emissions_monitor.is_active,
+        )
+
+    @router.post("/monitoring/stop", response_model=WorkerMonitoringStopResponse)
+    def stop_monitoring() -> WorkerMonitoringStopResponse:
+        carbon_kg, energy_kwh = runtime.emissions_monitor.stop()
+        return WorkerMonitoringStopResponse(
+            status="stopped",
+            worker_id=runtime.worker_id,
+            tracker_active=runtime.emissions_monitor.is_active,
+            carbon_kg=carbon_kg,
+            energy_kWh=energy_kwh,
         )
 
     @router.post(
