@@ -26,7 +26,7 @@ bash scripts/run/start_jetson_legacy_worker.sh <experiment_config> jetson
 Examples:
 
 ```bash
-bash scripts/run/start_jetson_legacy_worker.sh configs/experiments/exp1_5_ee_heterogeneous.yaml jetson
+bash scripts/run/start_jetson_legacy_worker.sh configs/experiments/exp1_5_ee_heterogeneous_2nodes.yaml jetson
 ```
 
 ```bash

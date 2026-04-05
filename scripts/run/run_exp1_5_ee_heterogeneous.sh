@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_PATH="${1:-configs/experiments/exp1_5_ee_heterogeneous.yaml}"
+CONFIG_PATH="${1:-configs/experiments/exp1_5_ee_heterogeneous_2nodes.yaml}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
