@@ -101,6 +101,7 @@ def create_router(runtime: WorkerRuntime) -> APIRouter:
 
         except Exception as exc:
             error = ErrorResponse(
+                status="error",
                 request_id=_safe_request_id(metadata),
                 sample_id=_safe_sample_id(metadata),
                 trace_id=_safe_trace_id(metadata),
@@ -108,7 +109,7 @@ def create_router(runtime: WorkerRuntime) -> APIRouter:
                 stage_id=runtime.partition_id,
                 error_message=str(exc),
                 error_type=type(exc).__name__,
-            ) # type: ignore
+            )
             return JSONResponse(status_code=500, content=error.model_dump())
 
     return router

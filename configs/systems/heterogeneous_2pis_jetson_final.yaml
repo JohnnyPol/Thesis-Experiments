@@ -1,7 +1,7 @@
 system_name: heterogeneous_2pis_jetson_final
 
 runtime:
-  request_timeout_sec: 30.0
+  request_timeout_sec: 120.0
 
 master:
   role: master

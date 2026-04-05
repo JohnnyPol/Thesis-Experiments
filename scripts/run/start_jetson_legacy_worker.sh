@@ -17,7 +17,6 @@ export PYTHONPATH="$REPO_ROOT"
 echo "[start_jetson_legacy_worker] repo_root=$REPO_ROOT"
 echo "[start_jetson_legacy_worker] config=$CONFIG_PATH"
 echo "[start_jetson_legacy_worker] worker_id=$WORKER_ID"
-echo "[start_jetson_legacy_worker] python=$PYTHON_BIN"
 
 python3 -m src.distributed_legacy.server \
   --config "$CONFIG_PATH" \
