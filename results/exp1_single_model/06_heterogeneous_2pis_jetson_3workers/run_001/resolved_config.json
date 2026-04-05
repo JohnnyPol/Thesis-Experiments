@@ -1,0 +1,140 @@
+{
+  "experiment_config": {
+    "experiment": {
+      "id": "exp1_6",
+      "name": "ee_heterogeneous_3nodes",
+      "description": "Early-exit ResNet-18 distributed across two Raspberry Pi workers and one Jetson Nano as the final worker."
+    },
+    "config_refs": {
+      "dataset": "configs/datasets/cifar10.yaml",
+      "model": "configs/models/resnet18_ee_entropy.yaml",
+      "system": "configs/systems/heterogeneous_2pis_jetson_final.yaml"
+    },
+    "runtime": {
+      "batch_size": 1,
+      "warmup_samples": 20,
+      "save_per_sample_metrics": true,
+      "save_predictions": false
+    },
+    "partitioning": {
+      "node_1": {
+        "stages": [
+          "conv1",
+          "maxpool",
+          "layer0",
+          "exit0",
+          "layer1",
+          "exit1"
+        ]
+      },
+      "node_2": {
+        "stages": [
+          "layer2",
+          "exit2"
+        ]
+      },
+      "node_3": {
+        "stages": [
+          "layer3",
+          "avgpool",
+          "fc"
+        ]
+      }
+    },
+    "output": {
+      "dir": "./results/exp1_single_model/06_heterogeneous_2pis_jetson_3workers/run_001"
+    }
+  },
+  "dataset_config": {
+    "name": "cifar10",
+    "root": "./data",
+    "num_classes": 10,
+    "download": true,
+    "input": {
+      "image_size": 256,
+      "channels": 3
+    },
+    "normalization": {
+      "mean": [
+        0.4914,
+        0.4822,
+        0.4465
+      ],
+      "std": [
+        0.2023,
+        0.1994,
+        0.201
+      ]
+    },
+    "loader": {
+      "batch_size": 1,
+      "shuffle": false,
+      "num_workers": 0,
+      "pin_memory": false
+    },
+    "splits": {
+      "valid_size": 0.1,
+      "random_seed": 42
+    }
+  },
+  "model_config": {
+    "name": "resnet18_ee_entropy",
+    "type": "early_exit",
+    "architecture": "resnet18",
+    "weights": {
+      "path": "./checkpoints/resnet18_ee_entropy.pth"
+    },
+    "early_exit": {
+      "criterion": "entropy",
+      "confidence_threshold": 0.9
+    }
+  },
+  "system_config": {
+    "system_name": "heterogeneous_2pis_jetson_final",
+    "runtime": {
+      "request_timeout_sec": 30.0
+    },
+    "master": {
+      "role": "master",
+      "device": "cpu"
+    },
+    "pipeline_order": [
+      "worker1",
+      "worker2",
+      "jetson"
+    ],
+    "workers": [
+      {
+        "worker_id": "worker1",
+        "partition_id": 0,
+        "host": "0.0.0.0",
+        "connect_host": "192.168.0.102",
+        "port": 9101,
+        "device": "cpu",
+        "next_worker_id": "worker2"
+      },
+      {
+        "worker_id": "worker2",
+        "partition_id": 1,
+        "host": "0.0.0.0",
+        "connect_host": "192.168.0.104",
+        "port": 9102,
+        "device": "cpu",
+        "next_worker_id": "jetson"
+      },
+      {
+        "worker_id": "jetson",
+        "partition_id": 2,
+        "host": "0.0.0.0",
+        "connect_host": "147.102.19.151",
+        "port": 9103,
+        "device": "gpu",
+        "next_worker_id": null
+      }
+    ],
+    "monitoring": {
+      "network_interface": "eth0"
+    }
+  },
+  "repo_root": "/home/rpi/Thesis-Experiments"
+}
