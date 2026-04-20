@@ -37,10 +37,12 @@ def execute_or_forward(
     If it needs to forward, call the next worker and then enrich the downstream
     terminal response with this worker's stage metrics.
     """
+    model_instance_id = str(metadata.model_instance_id or "model_0")
+    partition_module = runtime.get_partition_module(model_instance_id)
     tensor_on_device = tensor.to(runtime.device)
 
     with torch.no_grad():
-        output = runtime.partition_module(tensor_on_device)
+        output = partition_module(tensor_on_device)
 
     local_compute_time_sec = float(output.compute_time_sec)
 
@@ -67,6 +69,7 @@ def execute_or_forward(
         local_stage_metric = StageMetric(
             worker_id=runtime.worker_id,
             stage_id=runtime.partition_id,
+            model_instance_id=model_instance_id,
             compute_time_sec=local_compute_time_sec,
             request_bytes=int(inbound_request_bytes),
             response_bytes=int(local_response_bytes),
@@ -77,6 +80,7 @@ def execute_or_forward(
             request_id=metadata.request_id,
             sample_id=metadata.sample_id,
             trace_id=metadata.trace_id,
+            model_instance_id=model_instance_id,
             worker_id=runtime.worker_id,
             stage_id=runtime.partition_id,
             exit_id=int(output.exit_id),
@@ -108,6 +112,7 @@ def execute_or_forward(
         request_id=metadata.request_id,
         sample_id=metadata.sample_id,
         trace_id=metadata.trace_id,
+        model_instance_id=model_instance_id,
         request_kind=REQUEST_KIND_ACTIVATION,
         stage_id=runtime.partition_id + 1,
         origin_node=metadata.origin_node,
@@ -132,6 +137,7 @@ def execute_or_forward(
     local_stage_metric = StageMetric(
         worker_id=runtime.worker_id,
         stage_id=runtime.partition_id,
+        model_instance_id=model_instance_id,
         compute_time_sec=local_compute_time_sec,
         request_bytes=int(inbound_request_bytes),
         response_bytes=response_bytes_from_this_stage,
@@ -156,6 +162,7 @@ def execute_or_forward(
         request_id=downstream_terminal.request_id,
         sample_id=downstream_terminal.sample_id,
         trace_id=downstream_terminal.trace_id,
+        model_instance_id=downstream_terminal.model_instance_id,
         worker_id=downstream_terminal.worker_id,
         stage_id=downstream_terminal.stage_id,
         exit_id=downstream_terminal.exit_id,

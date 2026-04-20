@@ -16,6 +16,7 @@ def run_chained_inference(
     sample_id: int,
     entry_worker_cfg: dict[str, Any],
     timeout_sec: float = 30.0,
+    model_instance_id: str = "model_0",
 ) -> dict[str, Any]:
     """
     Send one sample to the entry worker. Downstream forwarding is handled
@@ -45,6 +46,7 @@ def run_chained_inference(
         request_id=request_id,
         sample_id=int(sample_id),
         trace_id=trace_id,
+        model_instance_id=str(model_instance_id),
         request_kind=REQUEST_KIND_INPUT,
         stage_id=int(entry_worker_cfg.get("partition_id", 0)),
         origin_node="master",
@@ -83,6 +85,7 @@ def run_chained_inference(
         )
 
     return {
+        "model_instance_id": str(terminal.model_instance_id),
         "predicted_class": int(terminal.predicted_class)
         if terminal.predicted_class is not None
         else -1,

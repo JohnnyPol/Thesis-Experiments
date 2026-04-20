@@ -21,6 +21,7 @@ from src.distributed.protocol.constants import (
 class StageMetric(BaseModel):
     worker_id: str = Field(..., description="Worker that executed this stage")
     stage_id: int = Field(..., ge=0, description="Logical stage/partition index")
+    model_instance_id: str = Field(default="model_0")
     compute_time_sec: float = Field(..., ge=0.0)
     request_bytes: int = Field(..., ge=0)
     response_bytes: int = Field(..., ge=0)
@@ -32,6 +33,7 @@ class InferenceRequestMetadata(BaseModel):
     request_id: str
     sample_id: int = Field(..., ge=0)
     trace_id: str
+    model_instance_id: str = Field(default="model_0")
 
     request_kind: str = Field(
         ...,
@@ -91,6 +93,7 @@ class TerminalInferenceResponse(BaseModel):
     request_id: str
     sample_id: int = Field(..., ge=0)
     trace_id: str
+    model_instance_id: str = Field(default="model_0")
 
     worker_id: str
     stage_id: int = Field(..., ge=0)
@@ -171,6 +174,7 @@ class WorkerInfoResponse(BaseModel):
     device: str
 
     next_worker_id: str | None = None
+    model_instance_ids: list[str] = Field(default_factory=list)
 
     model_name: str | None = None
     exit_policy: str | None = None

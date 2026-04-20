@@ -45,6 +45,8 @@ class WorkerRuntime:
     worker_cfg: dict[str, Any]
     next_worker_cfg: dict[str, Any] | None
     partition_module: torch.nn.Module
+    partition_modules: dict[str, torch.nn.Module]
+    model_instance_ids: list[str]
     model_name: str | None
     exit_policy: str | None
     emissions_monitor: WorkerEmissionsMonitor
@@ -52,6 +54,35 @@ class WorkerRuntime:
     @property
     def is_final_stage(self) -> bool:
         return self.next_worker_cfg is None
+
+    def get_partition_module(self, model_instance_id: str | None) -> torch.nn.Module:
+        resolved_id = str(model_instance_id or "model_0")
+        if resolved_id not in self.partition_modules:
+            raise ValueError(
+                f"Worker {self.worker_id} does not have a partition for "
+                f"model_instance_id='{resolved_id}'"
+            )
+        return self.partition_modules[resolved_id]
+
+
+def resolve_model_instance_ids(
+    *,
+    experiment_cfg: dict[str, Any] | None,
+    system_cfg: dict[str, Any],
+) -> list[str]:
+    runtime_cfg = (experiment_cfg or {}).get("runtime", {})
+    raw_count = runtime_cfg.get("model_instance_count", 1)
+    num_workers = len(system_cfg.get("workers", []))
+
+    if raw_count == "auto":
+        count = max(num_workers - 1, 1)
+    else:
+        count = int(raw_count)
+
+    if count < 1:
+        raise ValueError("model_instance_count must be at least 1")
+
+    return [f"model_{idx}" for idx in range(count)]
 
 
 def build_worker_runtime(
@@ -61,6 +92,7 @@ def build_worker_runtime(
     model_cfg: dict[str, Any],
     system_cfg: dict[str, Any],
     repo_root: str,
+    experiment_cfg: dict[str, Any] | None = None,
 ) -> WorkerRuntime:
     worker_cfg = find_worker_cfg(system_cfg, worker_id)
 
@@ -78,14 +110,22 @@ def build_worker_runtime(
     if exit_policy is None:
         exit_policy = model_cfg.get("exit_policy")
 
-    partition_module = build_partition_module(
-        partition_id=partition_id,
-        num_partitions=num_partitions,
-        model_cfg=model_cfg,
-        dataset_cfg=dataset_cfg,
-        repo_root=repo_root,
-        device=device,
+    model_instance_ids = resolve_model_instance_ids(
+        experiment_cfg=experiment_cfg,
+        system_cfg=system_cfg,
     )
+    partition_modules = {
+        model_instance_id: build_partition_module(
+            partition_id=partition_id,
+            num_partitions=num_partitions,
+            model_cfg=model_cfg,
+            dataset_cfg=dataset_cfg,
+            repo_root=repo_root,
+            device=device,
+        )
+        for model_instance_id in model_instance_ids
+    }
+    partition_module = partition_modules[model_instance_ids[0]]
 
     next_worker_cfg = resolve_next_worker_cfg(system_cfg, worker_cfg)
 
@@ -100,6 +140,8 @@ def build_worker_runtime(
         worker_cfg=worker_cfg,
         next_worker_cfg=next_worker_cfg,
         partition_module=partition_module,
+        partition_modules=partition_modules,
+        model_instance_ids=model_instance_ids,
         model_name=model_name,
         exit_policy=exit_policy,
         emissions_monitor=WorkerEmissionsMonitor(),

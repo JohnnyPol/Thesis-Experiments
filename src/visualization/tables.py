@@ -59,8 +59,15 @@ def _core_table(summary_df: pd.DataFrame) -> pd.DataFrame:
         "p95_latency_sec",
         "p99_latency_sec",
         "total_inference_time_sec",
+        "communication_overhead_avg_sec",
+        "communication_overhead_p95_sec",
+        "communication_overhead_ratio_avg",
         "num_samples",
     ]
+    for column in columns:
+        if column not in summary_df.columns:
+            summary_df[column] = pd.NA
+
     table = summary_df[columns].copy()
     return table.rename(
         columns={
@@ -72,6 +79,9 @@ def _core_table(summary_df: pd.DataFrame) -> pd.DataFrame:
             "p95_latency_sec": "p95_latency_sec",
             "p99_latency_sec": "p99_latency_sec",
             "total_inference_time_sec": "total_time_sec",
+            "communication_overhead_avg_sec": "communication_overhead_avg_sec",
+            "communication_overhead_p95_sec": "communication_overhead_p95_sec",
+            "communication_overhead_ratio_avg": "communication_overhead_ratio_avg",
             "num_samples": "samples",
         }
     )

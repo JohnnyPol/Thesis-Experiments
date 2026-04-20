@@ -106,12 +106,44 @@ def plot_network_protocol(df: pd.DataFrame, plot_dir: Path) -> None:
         label="Master Network GB",
         color="#B279A2",
     )
-    ax.set_title("Distributed Communication Overhead")
+    ax.set_title("Distributed Network And Protocol Bytes")
     ax.set_ylabel("GB")
     ax.set_xticks(x, labels, rotation=25, ha="right")
     ax.legend()
 
     _save(fig, plot_dir / "distributed_network_protocol.png")
+
+
+def plot_communication_overhead(df: pd.DataFrame, plot_dir: Path) -> None:
+    distributed_df = df[df["mode"].astype(str).str.startswith("distributed")].copy()
+    if distributed_df.empty or "communication_overhead_avg_sec" not in distributed_df.columns:
+        return
+
+    labels = distributed_df["topology_label"].tolist()
+    x = np.arange(len(labels))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(11, 5))
+    ax.bar(
+        x - width / 2,
+        distributed_df["communication_overhead_avg_sec"].fillna(0.0),
+        width=width,
+        label="Average",
+        color="#E45756",
+    )
+    ax.bar(
+        x + width / 2,
+        distributed_df["communication_overhead_p95_sec"].fillna(0.0),
+        width=width,
+        label="P95",
+        color="#72B7B2",
+    )
+    ax.set_title("Distributed Communication Overhead")
+    ax.set_ylabel("Seconds")
+    ax.set_xticks(x, labels, rotation=25, ha="right")
+    ax.legend()
+
+    _save(fig, plot_dir / "distributed_communication_overhead.png")
 
 
 def plot_exit_distribution(df: pd.DataFrame, plot_dir: Path) -> None:
@@ -179,6 +211,7 @@ def main() -> None:
     plot_performance_overview(df, plot_dir)
     plot_energy_emissions(df, plot_dir)
     plot_network_protocol(df, plot_dir)
+    plot_communication_overhead(df, plot_dir)
     plot_exit_distribution(df, plot_dir)
     plot_worker_compute_breakdown(df, plot_dir)
 

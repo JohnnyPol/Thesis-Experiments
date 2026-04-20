@@ -38,6 +38,7 @@ def create_router(runtime: WorkerRuntime) -> APIRouter:
             port=runtime.port,
             device=str(runtime.device),
             next_worker_id=runtime.next_worker_id,
+            model_instance_ids=runtime.model_instance_ids,
             model_name=runtime.model_name,
             exit_policy=runtime.exit_policy,
         )

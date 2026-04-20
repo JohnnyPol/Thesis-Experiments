@@ -43,6 +43,7 @@ def create_app_from_config(config_path: str, worker_id: str) -> FastAPI:
         model_cfg=model_cfg,
         system_cfg=system_cfg,
         repo_root=repo_root,
+        experiment_cfg=bundle["experiment_config"],
     )
 
     app = FastAPI(

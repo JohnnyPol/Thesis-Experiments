@@ -195,6 +195,8 @@ def evaluate_distributed_ee(
 
     protocol_bytes_total = 0
     remote_compute_total = 0.0
+    communication_overheads: list[float] = []
+    communication_overhead_ratios: list[float] = []
 
     worker_compute_totals = _make_stage_metric_maps(worker_cfgs, 0.0)
     stage_request_totals = _make_stage_metric_maps(worker_cfgs, 0)
@@ -237,8 +239,18 @@ def evaluate_distributed_ee(
                 latency = end - start
                 latencies.append(latency)
 
+                remote_compute_time_sec = float(
+                    distributed_output["remote_compute_time_sec"]
+                )
+                communication_overhead_sec = latency - remote_compute_time_sec
+                communication_overhead_ratio = (
+                    communication_overhead_sec / latency if latency > 0.0 else 0.0
+                )
+
                 protocol_bytes_total += int(distributed_output["protocol_bytes"])
-                remote_compute_total += float(distributed_output["remote_compute_time_sec"])
+                remote_compute_total += remote_compute_time_sec
+                communication_overheads.append(communication_overhead_sec)
+                communication_overhead_ratios.append(communication_overhead_ratio)
 
                 worker_compute_times = distributed_output["worker_compute_times"]
                 stage_request_bytes = distributed_output["stage_request_bytes"]
@@ -273,9 +285,9 @@ def evaluate_distributed_ee(
                     "exit_id": exit_id,
                     "confidence": distributed_output.get("confidence"),
                     "protocol_bytes": int(distributed_output["protocol_bytes"]),
-                    "remote_compute_time_sec": float(
-                        distributed_output["remote_compute_time_sec"]
-                    ),
+                    "remote_compute_time_sec": remote_compute_time_sec,
+                    "communication_overhead_sec": communication_overhead_sec,
+                    "communication_overhead_ratio": communication_overhead_ratio,
                     "path": "->".join(distributed_output.get("path", [])),
                 }
 
@@ -325,6 +337,7 @@ def evaluate_distributed_ee(
         experiment_start, experiment_end
     )
     latency_stats = compute_latency_stats(latencies)
+    communication_overhead_stats = compute_latency_stats(communication_overheads)
     throughput = compute_throughput(total, total_inference_time_sec)
     node_utilization = compute_node_utilization(
         latency_stats["busy_time_sec"],
@@ -357,6 +370,38 @@ def evaluate_distributed_ee(
         "remote_compute_time_total_sec": float(remote_compute_total),
         "remote_compute_time_avg_sec": (
             float(remote_compute_total / total) if total > 0 else 0.0
+        ),
+        "communication_overhead_total_sec": float(
+            communication_overhead_stats["busy_time_sec"]
+        ),
+        "communication_overhead_avg_sec": float(
+            communication_overhead_stats["avg_latency_sec"]
+        ),
+        "communication_overhead_std_sec": float(
+            communication_overhead_stats["std_latency_sec"]
+        ),
+        "communication_overhead_min_sec": float(
+            communication_overhead_stats["min_latency_sec"]
+        ),
+        "communication_overhead_max_sec": float(
+            communication_overhead_stats["max_latency_sec"]
+        ),
+        "communication_overhead_p50_sec": float(
+            communication_overhead_stats["p50_latency_sec"]
+        ),
+        "communication_overhead_p95_sec": float(
+            communication_overhead_stats["p95_latency_sec"]
+        ),
+        "communication_overhead_p99_sec": float(
+            communication_overhead_stats["p99_latency_sec"]
+        ),
+        "communication_overhead_ratio_avg": (
+            float(sum(communication_overhead_ratios) / total) if total > 0 else 0.0
+        ),
+        "communication_overhead_ratio_total": (
+            float(communication_overhead_stats["busy_time_sec"] / sum(latencies))
+            if sum(latencies) > 0.0
+            else 0.0
         ),
     }
     results.update(latency_stats)

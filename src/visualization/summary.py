@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 
@@ -35,6 +36,58 @@ def load_metrics_files(results_dir: Path) -> list[Path]:
     return sorted(results_dir.glob("*/run_*/metrics.json"))
 
 
+def _compute_communication_overhead_fields(metrics_path: Path) -> dict[str, float]:
+    latencies_path = metrics_path.with_name("latencies.csv")
+    if not latencies_path.exists():
+        return {}
+
+    df = pd.read_csv(latencies_path)
+    required_columns = {"latency_sec", "remote_compute_time_sec"}
+    if not required_columns.issubset(df.columns):
+        return {}
+
+    overhead = (
+        df["latency_sec"].astype(float) - df["remote_compute_time_sec"].astype(float)
+    ).to_numpy(dtype=np.float64)
+    latency = df["latency_sec"].astype(float).to_numpy(dtype=np.float64)
+    ratios = np.divide(
+        overhead,
+        latency,
+        out=np.zeros_like(overhead, dtype=np.float64),
+        where=latency > 0.0,
+    )
+
+    if overhead.size == 0:
+        return {
+            "communication_overhead_total_sec": 0.0,
+            "communication_overhead_avg_sec": 0.0,
+            "communication_overhead_std_sec": 0.0,
+            "communication_overhead_min_sec": 0.0,
+            "communication_overhead_max_sec": 0.0,
+            "communication_overhead_p50_sec": 0.0,
+            "communication_overhead_p95_sec": 0.0,
+            "communication_overhead_p99_sec": 0.0,
+            "communication_overhead_ratio_avg": 0.0,
+            "communication_overhead_ratio_total": 0.0,
+        }
+
+    latency_total = float(np.sum(latency))
+    return {
+        "communication_overhead_total_sec": float(np.sum(overhead)),
+        "communication_overhead_avg_sec": float(np.mean(overhead)),
+        "communication_overhead_std_sec": float(np.std(overhead)),
+        "communication_overhead_min_sec": float(np.min(overhead)),
+        "communication_overhead_max_sec": float(np.max(overhead)),
+        "communication_overhead_p50_sec": float(np.percentile(overhead, 50)),
+        "communication_overhead_p95_sec": float(np.percentile(overhead, 95)),
+        "communication_overhead_p99_sec": float(np.percentile(overhead, 99)),
+        "communication_overhead_ratio_avg": float(np.mean(ratios)),
+        "communication_overhead_ratio_total": (
+            float(np.sum(overhead) / latency_total) if latency_total > 0.0 else 0.0
+        ),
+    }
+
+
 def infer_topology_label(row: dict[str, Any]) -> str:
     experiment_id = str(row.get("experiment_id", ""))
     mapping = {
@@ -44,6 +97,7 @@ def infer_topology_label(row: dict[str, Any]) -> str:
         "exp1_4": "Homogeneous 3 Workers",
         "exp1_5": "Heterogeneous Pi + Jetson",
         "exp1_6": "Heterogeneous 2 Pis + Jetson",
+        "exp2": "Homogeneous Multi-Model",
     }
     return mapping.get(experiment_id, experiment_id or str(row.get("system_name", "Unknown")))
 
@@ -58,6 +112,8 @@ def infer_category(row: dict[str, Any]) -> str:
         return "distributed_homogeneous"
     if experiment_id in {"exp1_5", "exp1_6"}:
         return "distributed_heterogeneous"
+    if experiment_id == "exp2":
+        return "distributed_multi_model"
     return "other"
 
 
@@ -68,6 +124,8 @@ def extract_worker_ids(row: dict[str, Any]) -> list[str]:
             continue
         if key.startswith("remote_"):
             continue
+        if key.startswith("model_"):
+            continue
         worker_ids.add(key[: -len("_compute_time_total_sec")])
     return sorted(worker_ids)
 
@@ -77,6 +135,9 @@ def load_summary_dataframe(results_dir: Path) -> pd.DataFrame:
     for metrics_path in load_metrics_files(results_dir):
         with open(metrics_path, "r", encoding="utf-8") as handle:
             row = json.load(handle)
+
+        if "communication_overhead_avg_sec" not in row:
+            row.update(_compute_communication_overhead_fields(metrics_path))
 
         row["metrics_path"] = str(metrics_path.resolve())
         row["topology_label"] = infer_topology_label(row)
