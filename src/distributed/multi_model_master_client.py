@@ -3,7 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    Future,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)
 from pathlib import Path
 from typing import Any
 
@@ -79,18 +85,14 @@ def _stop_worker_monitors(
     return monitoring_results
 
 
-def _load_sample_records(
+def _build_test_loader(
     *,
     dataset_cfg: dict[str, Any],
     data_dir: str,
     batch_size: int,
-    max_samples: int | None,
-) -> list[tuple[int, torch.Tensor, int]]:
-    if batch_size != 1:
-        raise ValueError("Experiment 2 currently supports batch_size=1 only.")
-
+):
     loader_cfg = dataset_cfg.get("loader", {})
-    loader = data_loader(
+    return data_loader(
         data_dir=data_dir,
         batch_size=batch_size,
         test=True,
@@ -98,12 +100,9 @@ def _load_sample_records(
         dataset_config=dataset_cfg,
     )
 
-    records: list[tuple[int, torch.Tensor, int]] = []
-    for sample_index, (images, labels) in enumerate(loader):
-        if max_samples is not None and sample_index >= max_samples:
-            break
-        records.append((sample_index, images.cpu(), int(labels.cpu()[0].item())))
-    return records
+
+def _get_loader_dataset_size(loader: Any) -> int | None:
+    return len(loader.dataset) if hasattr(loader, "dataset") else None
 
 
 def _run_one_inference(
@@ -243,23 +242,45 @@ def evaluate_multi_model_distributed_ee(
     concurrency = max(concurrency, 1)
     warmup_samples = int(runtime_cfg.get("warmup_samples", 0))
 
-    sample_records = _load_sample_records(
+    warmup_loader = _build_test_loader(
         dataset_cfg=dataset_cfg,
         data_dir=data_dir,
         batch_size=batch_size,
-        max_samples=max_samples_per_model,
     )
-    if not sample_records:
+    dataset_size = _get_loader_dataset_size(warmup_loader)
+    target_samples_per_model = (
+        min(max_samples_per_model, dataset_size)
+        if (max_samples_per_model is not None and dataset_size is not None)
+        else max_samples_per_model
+    )
+    if target_samples_per_model is None:
+        target_samples_per_model = dataset_size
+    if target_samples_per_model == 0:
         raise ValueError("No samples available for Experiment 2 evaluation.")
+
+    warmup_records: list[tuple[int, torch.Tensor, int]] = []
+    if warmup_samples > 0:
+        for sample_index, (images, labels) in enumerate(warmup_loader):
+            warmup_records.append(
+                (sample_index, images.cpu(), int(labels.cpu()[0].item()))
+            )
+            if len(warmup_records) >= warmup_samples:
+                break
 
     entry_worker_cfg = worker_cfgs[0]
     _run_warmup(
         model_instance_ids=model_instance_ids,
-        sample_records=sample_records,
+        sample_records=warmup_records,
         warmup_samples=warmup_samples,
         entry_worker_cfg=entry_worker_cfg,
         timeout_sec=timeout_sec,
         concurrency=concurrency,
+    )
+
+    test_loader = _build_test_loader(
+        dataset_cfg=dataset_cfg,
+        data_dir=data_dir,
+        batch_size=batch_size,
     )
 
     master_monitor_cfg = system_cfg.get("monitoring", {})
@@ -274,35 +295,73 @@ def evaluate_multi_model_distributed_ee(
     experiment_start = time.time()
 
     rows: list[dict[str, Any]] = []
-    total_jobs = len(model_instance_ids) * len(sample_records)
+    total_jobs = (
+        len(model_instance_ids) * target_samples_per_model
+        if target_samples_per_model is not None
+        else None
+    )
 
     try:
         with ThreadPoolExecutor(max_workers=concurrency) as executor:
-            future_to_job = {}
-            for model_instance_id in model_instance_ids:
-                for sample_index, image_tensor, label_value in sample_records:
-                    future = executor.submit(
-                        _run_one_inference,
-                        model_instance_id=model_instance_id,
-                        sample_index=sample_index,
-                        image_tensor=image_tensor,
-                        label_value=label_value,
-                        entry_worker_cfg=entry_worker_cfg,
-                        timeout_sec=timeout_sec,
-                    )
-                    future_to_job[future] = (model_instance_id, sample_index)
-
+            pending: set[Future[dict[str, Any]]] = set()
             completed = 0
-            for future in as_completed(future_to_job):
-                row = future.result()
-                rows.append(row)
-                completed += 1
-                if show_progress:
-                    print(
-                        f"\rInferred {completed}/{total_jobs} model-samples",
-                        end="",
-                        flush=True,
+
+            def collect_done(done_futures: set[Future[dict[str, Any]]]) -> None:
+                nonlocal completed
+                for done_future in done_futures:
+                    row = done_future.result()
+                    rows.append(row)
+                    completed += 1
+                    if show_progress:
+                        if total_jobs is None:
+                            print(
+                                f"\rInferred {completed} model-samples",
+                                end="",
+                                flush=True,
+                            )
+                        else:
+                            print(
+                                f"\rInferred {completed}/{total_jobs} model-samples",
+                                end="",
+                                flush=True,
+                            )
+
+            max_pending = max(concurrency * 2, 1)
+            sample_count = 0
+            for sample_index, (images, labels) in enumerate(test_loader):
+                if (
+                    max_samples_per_model is not None
+                    and sample_count >= max_samples_per_model
+                ):
+                    break
+
+                image_tensor = images.cpu()
+                label_value = int(labels.cpu()[0].item())
+
+                for model_instance_id in model_instance_ids:
+                    pending.add(
+                        executor.submit(
+                            _run_one_inference,
+                            model_instance_id=model_instance_id,
+                            sample_index=sample_index,
+                            image_tensor=image_tensor,
+                            label_value=label_value,
+                            entry_worker_cfg=entry_worker_cfg,
+                            timeout_sec=timeout_sec,
+                        )
                     )
+                    if len(pending) >= max_pending:
+                        done, pending = wait(
+                            pending,
+                            return_when=FIRST_COMPLETED,
+                        )
+                        collect_done(done)
+
+                sample_count += 1
+
+            while pending:
+                done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                collect_done(done)
 
             if show_progress:
                 print()
@@ -406,7 +465,9 @@ def evaluate_multi_model_distributed_ee(
         "accuracy": compute_accuracy(correct, total),
         "num_correct": int(correct),
         "num_samples": int(total),
-        "samples_per_model": int(len(sample_records)),
+        "samples_per_model": (
+            int(total / len(model_instance_ids)) if model_instance_ids else 0
+        ),
         "total_inference_time_sec": float(total_inference_time_sec),
         "throughput_samples_per_sec": float(throughput),
         "master_node_utilization": float(node_utilization),
