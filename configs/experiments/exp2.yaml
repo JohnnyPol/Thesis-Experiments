@@ -13,7 +13,7 @@ runtime:
   warmup_samples: 20
   model_instance_count: auto
   concurrency: 2
-  max_samples_per_model: 1000
+  max_samples_per_model: null
   save_per_sample_metrics: true
   save_predictions: false
 
