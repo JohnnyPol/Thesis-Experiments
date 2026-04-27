@@ -1,0 +1,3 @@
+| experiment | topology | accuracy_pct | throughput_samples_per_sec | avg_latency_sec | p95_latency_sec | p99_latency_sec | total_time_sec | communication_overhead_avg_sec | communication_overhead_p95_sec | communication_overhead_ratio_avg | samples |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| exp2 | Homogeneous Multi-Model | 85.32 | 3.116516802732299 | 0.6414583352446556 | 1.2983772158622742 | 1.5478558945655816 | 6417.420879125595 | 0.4163785827755928 | 1.0156582713127136 | 0.5658201816684126 | 20000 |

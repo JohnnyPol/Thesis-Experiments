@@ -1,0 +1,2 @@
+experiment,topology,master_energy_kWh,workers_energy_kWh_total,system_energy_kWh_total,master_carbon_kg,workers_carbon_kg_total,system_carbon_kg_total
+exp2,Homogeneous Multi-Model,0.0040878390097837695,0.016356386593023114,0.020444225602806884,0.001375860326878963,0.005505134461160162,0.006880994788039125
