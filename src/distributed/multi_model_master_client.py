@@ -560,6 +560,10 @@ def evaluate_multi_model_distributed_ee(
         compute_total = float(worker_compute_totals[worker_id])
         req_total = int(stage_request_totals[worker_id])
         resp_total = int(stage_response_totals[worker_id])
+        worker_node_utilization = compute_node_utilization(
+            compute_total,
+            total_inference_time_sec,
+        )
         worker_monitoring = worker_monitoring_results.get(worker_id, {})
         worker_carbon_kg = worker_monitoring.get("carbon_kg")
         worker_energy_kwh = worker_monitoring.get("energy_kWh")
@@ -568,6 +572,7 @@ def evaluate_multi_model_distributed_ee(
         results[f"{worker_id}_compute_time_avg_sec"] = (
             float(compute_total / total) if total > 0 else 0.0
         )
+        results[f"{worker_id}_node_utilization"] = float(worker_node_utilization)
         results[f"{worker_id}_request_bytes_total"] = req_total
         results[f"{worker_id}_response_bytes_total"] = resp_total
         results[f"{worker_id}_carbon_kg"] = worker_carbon_kg

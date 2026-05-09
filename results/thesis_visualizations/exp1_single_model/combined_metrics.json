@@ -68,6 +68,8 @@
     "workers_energy_kWh_total":null,
     "system_carbon_kg_total":null,
     "system_energy_kWh_total":null,
+    "worker1_node_utilization":null,
+    "worker2_node_utilization":null,
     "communication_overhead_total_sec":null,
     "communication_overhead_avg_sec":null,
     "communication_overhead_std_sec":null,
@@ -84,12 +86,14 @@
     "worker3_response_bytes_total":null,
     "worker3_carbon_kg":null,
     "worker3_energy_kWh":null,
+    "worker3_node_utilization":null,
     "jetson_compute_time_total_sec":null,
     "jetson_compute_time_avg_sec":null,
     "jetson_request_bytes_total":null,
     "jetson_response_bytes_total":null,
     "jetson_carbon_kg":null,
-    "jetson_energy_kWh":null
+    "jetson_energy_kWh":null,
+    "jetson_node_utilization":null
   },
   {
     "model_name":"resnet18_ee_entropy",
@@ -160,6 +164,8 @@
     "workers_energy_kWh_total":null,
     "system_carbon_kg_total":null,
     "system_energy_kWh_total":null,
+    "worker1_node_utilization":null,
+    "worker2_node_utilization":null,
     "communication_overhead_total_sec":null,
     "communication_overhead_avg_sec":null,
     "communication_overhead_std_sec":null,
@@ -176,12 +182,14 @@
     "worker3_response_bytes_total":null,
     "worker3_carbon_kg":null,
     "worker3_energy_kWh":null,
+    "worker3_node_utilization":null,
     "jetson_compute_time_total_sec":null,
     "jetson_compute_time_avg_sec":null,
     "jetson_request_bytes_total":null,
     "jetson_response_bytes_total":null,
     "jetson_carbon_kg":null,
-    "jetson_energy_kWh":null
+    "jetson_energy_kWh":null,
+    "jetson_node_utilization":null
   },
   {
     "model_name":"resnet18_ee_entropy",
@@ -252,6 +260,8 @@
     "workers_energy_kWh_total":0.0065632272,
     "system_carbon_kg_total":0.0028998258,
     "system_energy_kWh_total":0.0086157153,
+    "worker1_node_utilization":0.6705527056,
+    "worker2_node_utilization":0.0251905477,
     "communication_overhead_total_sec":862.8917367458,
     "communication_overhead_avg_sec":0.0862891737,
     "communication_overhead_std_sec":0.0152661513,
@@ -268,12 +278,14 @@
     "worker3_response_bytes_total":null,
     "worker3_carbon_kg":null,
     "worker3_energy_kWh":null,
+    "worker3_node_utilization":null,
     "jetson_compute_time_total_sec":null,
     "jetson_compute_time_avg_sec":null,
     "jetson_request_bytes_total":null,
     "jetson_response_bytes_total":null,
     "jetson_carbon_kg":null,
-    "jetson_energy_kWh":null
+    "jetson_energy_kWh":null,
+    "jetson_node_utilization":null
   },
   {
     "model_name":"resnet18_ee_entropy",
@@ -344,6 +356,8 @@
     "workers_energy_kWh_total":0.0081086419,
     "system_carbon_kg_total":0.0034669138,
     "system_energy_kWh_total":0.0103005991,
+    "worker1_node_utilization":0.5084004402,
+    "worker2_node_utilization":0.0837448754,
     "communication_overhead_total_sec":1199.0740046501,
     "communication_overhead_avg_sec":0.1199074005,
     "communication_overhead_std_sec":0.0578814034,
@@ -360,12 +374,14 @@
     "worker3_response_bytes_total":1020404.0,
     "worker3_carbon_kg":0.0007430769,
     "worker3_energy_kWh":0.0022077668,
+    "worker3_node_utilization":0.0254744776,
     "jetson_compute_time_total_sec":null,
     "jetson_compute_time_avg_sec":null,
     "jetson_request_bytes_total":null,
     "jetson_response_bytes_total":null,
     "jetson_carbon_kg":null,
-    "jetson_energy_kWh":null
+    "jetson_energy_kWh":null,
+    "jetson_node_utilization":null
   },
   {
     "model_name":"resnet18_ee_entropy",
@@ -436,6 +452,8 @@
     "workers_energy_kWh_total":0.0044225249,
     "system_carbon_kg_total":0.0021703707,
     "system_energy_kWh_total":0.0064484206,
+    "worker1_node_utilization":0.6716261505,
+    "worker2_node_utilization":null,
     "communication_overhead_total_sec":880.8096458912,
     "communication_overhead_avg_sec":0.0880809646,
     "communication_overhead_std_sec":0.0217326244,
@@ -452,12 +470,14 @@
     "worker3_response_bytes_total":null,
     "worker3_carbon_kg":null,
     "worker3_energy_kWh":null,
+    "worker3_node_utilization":null,
     "jetson_compute_time_total_sec":45.3651108742,
     "jetson_compute_time_avg_sec":0.0045365111,
     "jetson_request_bytes_total":408969434.0,
     "jetson_response_bytes_total":1019611.0,
     "jetson_carbon_kg":null,
-    "jetson_energy_kWh":null
+    "jetson_energy_kWh":null,
+    "jetson_node_utilization":0.0142796108
   },
   {
     "model_name":"resnet18_ee_entropy",
@@ -528,6 +548,8 @@
     "workers_energy_kWh_total":0.0059086538,
     "system_carbon_kg_total":0.0027244227,
     "system_energy_kWh_total":0.0080945726,
+    "worker1_node_utilization":0.5142410163,
+    "worker2_node_utilization":0.0836667432,
     "communication_overhead_total_sec":1214.967587471,
     "communication_overhead_avg_sec":0.1214967587,
     "communication_overhead_std_sec":0.061936102,
@@ -544,11 +566,13 @@
     "worker3_response_bytes_total":null,
     "worker3_carbon_kg":null,
     "worker3_energy_kWh":null,
+    "worker3_node_utilization":null,
     "jetson_compute_time_total_sec":47.1006267071,
     "jetson_compute_time_avg_sec":0.0047100627,
     "jetson_request_bytes_total":408969494.0,
     "jetson_response_bytes_total":1019671.0,
     "jetson_carbon_kg":null,
-    "jetson_energy_kWh":null
+    "jetson_energy_kWh":null,
+    "jetson_node_utilization":0.0137393398
   }
 ]

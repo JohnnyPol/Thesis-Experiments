@@ -126,10 +126,18 @@ Distributed runs aggregate per-worker fields:
 
 - `<worker_id>_compute_time_total_sec`
 - `<worker_id>_compute_time_avg_sec`
+- `<worker_id>_node_utilization`
 - `<worker_id>_request_bytes_total`
 - `<worker_id>_response_bytes_total`
 - `<worker_id>_carbon_kg`
 - `<worker_id>_energy_kWh`
+
+Where:
+
+```text
+<worker_id>_node_utilization =
+    <worker_id>_compute_time_total_sec / total_inference_time_sec
+```
 
 The per-sample CSV has matching per-worker columns with `_sec`,
 `_request_bytes`, and `_response_bytes` suffixes.
@@ -206,7 +214,7 @@ normalize the raw metrics into thesis-friendly views:
   sample count.
 - `energy_metrics`: master, worker, and total energy/carbon fields.
 - `exit_distribution`: exit ratios by experiment.
-- `worker_breakdown`: worker compute, byte, energy, and carbon values.
+- `worker_breakdown`: worker compute, utilization, byte, energy, and carbon values.
 
 The combined CSV and JSON files preserve the broader raw metric set for custom
 analysis.

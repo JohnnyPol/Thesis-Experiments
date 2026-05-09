@@ -60,5 +60,8 @@
   "system_name": "homogeneous_3workers",
   "weights_path": "/home/rpi/Thesis-Experiments/checkpoints/resnet18_ee_entropy.pth",
   "data_dir": "/home/rpi/Thesis-Experiments/data",
-  "output_dir": "/home/rpi/Thesis-Experiments/results/exp1_single_model/04_homogeneous_3workers_ee/run_001"
+  "output_dir": "/home/rpi/Thesis-Experiments/results/exp1_single_model/04_homogeneous_3workers_ee/run_001",
+  "worker1_node_utilization": 0.5084004401667049,
+  "worker2_node_utilization": 0.08374487539382863,
+  "worker3_node_utilization": 0.02547447760703752
 }

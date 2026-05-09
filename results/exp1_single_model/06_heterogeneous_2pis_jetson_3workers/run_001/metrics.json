@@ -60,5 +60,8 @@
   "system_name": "heterogeneous_2pis_jetson_final",
   "weights_path": "/home/rpi/Thesis-Experiments/checkpoints/resnet18_ee_entropy.pth",
   "data_dir": "/home/rpi/Thesis-Experiments/data",
-  "output_dir": "/home/rpi/Thesis-Experiments/results/exp1_single_model/06_heterogeneous_2pis_jetson_3workers/run_001"
+  "output_dir": "/home/rpi/Thesis-Experiments/results/exp1_single_model/06_heterogeneous_2pis_jetson_3workers/run_001",
+  "worker1_node_utilization": 0.5142410163369971,
+  "worker2_node_utilization": 0.08366674321391152,
+  "jetson_node_utilization": 0.013739339782946
 }
