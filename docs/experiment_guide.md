@@ -42,50 +42,50 @@ multi-model setting as Experiment 2:
 - 3 workers
 - 2 logical early-exit ResNet-18 model instances
 - 3 partitions per model
-- `worker3` as the spare late-stage worker
+- `worker3` as the consolidated late-stage worker
 
-The goal is to reduce the memory footprint per busy node and improve worker
-utilization by changing where model partitions are loaded. The experiment uses
-the observation that early-exit traffic decreases with model depth: all samples
-enter stage `0`, fewer samples reach stage `1`, and even fewer reach stage `2`
-because many samples exit earlier.
+The goal is to reduce pressure on the busiest Raspberry Pis by changing where
+model partitions are loaded. The experiment uses the observation that most of
+the exit distribution falls on the first partition: all samples enter stage `0`,
+fewer samples reach stage `1`, and even fewer reach stage `2` because many
+samples exit earlier.
 
 The agreed placement is:
 
 ```text
 worker1:
   model_0 stage_0
-  model_1 stage_1
 
 worker2:
   model_1 stage_0
-  model_0 stage_1
 
 worker3:
+  model_0 stage_1
   model_0 stage_2
+  model_1 stage_1
   model_1 stage_2
 ```
 
 This satisfies the intended constraints:
 
 - each worker has at most one first-stage model partition
-- each worker has at most one second-stage model partition
-- the spare worker handles the deeper, lower-traffic third-stage partitions
+- `worker3` handles the deeper, lower-traffic second- and third-stage
+  partitions for both model instances
 
 The per-model routes become:
 
 ```text
-model_0: worker1 stage_0 -> worker2 stage_1 -> worker3 stage_2
-model_1: worker2 stage_0 -> worker1 stage_1 -> worker3 stage_2
+model_0: worker1 stage_0 -> worker3 stage_1 -> worker3 stage_2
+model_1: worker2 stage_0 -> worker3 stage_1 -> worker3 stage_2
 ```
 
 The placement table can also be read as a memory-footprint constraint:
 
 | Worker | Assigned partitions | Role |
 | --- | --- | --- |
-| `worker1` | `model_0 stage_0`, `model_1 stage_1` | primary worker with one first-stage and one second-stage partition |
-| `worker2` | `model_1 stage_0`, `model_0 stage_1` | primary worker with one first-stage and one second-stage partition |
-| `worker3` | `model_0 stage_2`, `model_1 stage_2` | spare worker for deeper, lower-traffic partitions |
+| `worker1` | `model_0 stage_0` | primary worker for the first model's high-traffic first partition |
+| `worker2` | `model_1 stage_0` | primary worker for the second model's high-traffic first partition |
+| `worker3` | `model_0 stage_1`, `model_0 stage_2`, `model_1 stage_1`, `model_1 stage_2` | consolidated worker for lower-traffic later partitions |
 
 This is the target placement for the final thesis comparison.
 
@@ -104,14 +104,13 @@ The expected thesis comparison is:
 - Experiment 3 splits first-stage partitions between `worker1` and `worker2`.
 - Experiment 3 keeps `worker3` focused on the deeper partitions that receive
   less traffic.
-- Experiment 3 should reduce first-stage memory concentration and improve
-  utilization balance, while possibly changing communication overhead because
-  each model follows a different route.
+- Experiment 3 should reduce first-stage traffic concentration on a single
+  Raspberry Pi, while possibly changing communication overhead because the
+  later partitions are consolidated on `worker3`.
 
-`configs/experiments/exp3.yaml` is empty in the current repository. The design
-above documents the target experiment, but the current runtime still needs
-placement-aware loading and per-model routing support before this experiment can
-be executed.
+`configs/experiments/exp3.yaml` contains this explicit placement. The modern
+multi-model runtime reads this placement block for Experiment 3 while preserving
+the original static pipeline behavior for the earlier experiments.
 
 ## Config Composition
 
@@ -143,36 +142,36 @@ placement:
     worker1:
       - model_instance_id: model_0
         partition_id: 0
-      - model_instance_id: model_1
-        partition_id: 1
     worker2:
       - model_instance_id: model_1
         partition_id: 0
-      - model_instance_id: model_0
-        partition_id: 1
     worker3:
       - model_instance_id: model_0
+        partition_id: 1
+      - model_instance_id: model_0
         partition_id: 2
+      - model_instance_id: model_1
+        partition_id: 1
       - model_instance_id: model_1
         partition_id: 2
   routes:
     model_0:
       - worker_id: worker1
         partition_id: 0
-      - worker_id: worker2
+      - worker_id: worker3
         partition_id: 1
       - worker_id: worker3
         partition_id: 2
     model_1:
       - worker_id: worker2
         partition_id: 0
-      - worker_id: worker1
+      - worker_id: worker3
         partition_id: 1
       - worker_id: worker3
         partition_id: 2
   constraints:
     max_first_partitions_per_worker: 1
-    max_second_partitions_per_worker: 1
+    later_partitions_worker_id: worker3
 ```
 
 The `assignments` block defines which partitions each worker loads. The
@@ -276,8 +275,9 @@ selects partition modules from `partition_id` and the number of workers.
 
 Experiment 3 keeps the same three partition definitions, but changes which
 worker owns each `(model_instance_id, partition_id)` pair. That means a worker
-may need to load different partition IDs for different model instances. For
-example, `worker1` owns `model_0 stage_0` and `model_1 stage_1`.
+may need to load multiple partition IDs for different model instances. For
+example, `worker3` owns stage `1` and stage `2` for both `model_0` and
+`model_1`.
 
 ## Distributed Runtime Flow
 
@@ -358,7 +358,7 @@ another worker, or reaches the final stage.
 
 ## Experiment 3 Implementation Requirements
 
-Experiment 3 requires these runtime changes before it can be executed:
+Experiment 3 uses the following placement-aware runtime behavior:
 
 - load only the assigned `(model_instance_id, partition_id)` modules on each
   worker
@@ -366,10 +366,10 @@ Experiment 3 requires these runtime changes before it can be executed:
 - choose the entry worker from the first route entry for each model instance
 - include the selected route in per-sample output rows
 - validate that every route has stages `0`, `1`, and `2` exactly once
-- validate that each worker has at most one stage `0` partition and at most one
-  stage `1` partition
+- validate that each Raspberry Pi has at most one stage `0` partition and that
+  all later partitions are assigned to `worker3`
 - estimate or measure partition memory per worker for the memory-footprint
-  comparison
+  comparison as a follow-up metric
 
 The central implementation difference from Experiment 2 is this lookup:
 
@@ -419,8 +419,22 @@ Experiment 2 additionally performs worker health checks before launching the
 master.
 
 Experiment 3 should perform the same health checks, then validate that the
-configured placement satisfies the first-stage and second-stage limits before
-starting measured inference.
+configured placement satisfies the first-stage split and `worker3` later-stage
+assignment before starting measured inference.
+
+Start one worker service per worker:
+
+```bash
+bash scripts/run/start_worker_api.sh configs/experiments/exp3.yaml worker1
+bash scripts/run/start_worker_api.sh configs/experiments/exp3.yaml worker2
+bash scripts/run/start_worker_api.sh configs/experiments/exp3.yaml worker3
+```
+
+Run the Experiment 3 master:
+
+```bash
+bash scripts/run/run_exp3_memory_aware_multi_model.sh
+```
 
 ## Result Files
 

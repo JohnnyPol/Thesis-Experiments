@@ -38,148 +38,205 @@ def execute_or_forward(
     terminal response with this worker's stage metrics.
     """
     model_instance_id = str(metadata.model_instance_id or "model_0")
-    partition_module = runtime.get_partition_module(model_instance_id)
-    tensor_on_device = tensor.to(runtime.device)
+    current_metadata = metadata
+    current_tensor = tensor
+    current_inbound_request_bytes = int(inbound_request_bytes)
 
-    with torch.no_grad():
-        output = partition_module(tensor_on_device)
+    local_stage_metrics: list[StageMetric] = []
+    local_path: list[str] = []
+    local_request_bytes_total = 0
+    local_response_bytes_total = 0
+    local_compute_time_total = 0.0
 
-    local_compute_time_sec = float(output.compute_time_sec)
+    while True:
+        current_partition_id = runtime.resolve_current_partition_id(
+            int(current_metadata.stage_id)
+        )
+        partition_module = runtime.get_partition_module(
+            model_instance_id,
+            current_partition_id,
+        )
+        tensor_on_device = current_tensor.to(runtime.device)
 
-    if output.status in {RESPONSE_STATUS_EXITED, RESPONSE_STATUS_COMPLETED}:
-        logits = _extract_logits_cpu(output.logits)
-        predicted_class, confidence = _compute_prediction_summary(logits)
+        with torch.no_grad():
+            output = partition_module(tensor_on_device)
 
-        logits_shape = list(logits.shape)
-        logits_dtype = torch_dtype_to_str(logits.dtype)
+        local_compute_time_sec = float(output.compute_time_sec)
+        local_compute_time_total += local_compute_time_sec
+        local_request_bytes_total += int(current_inbound_request_bytes)
 
-        local_response_bytes = _estimate_terminal_response_bytes(
-            request_id=metadata.request_id,
-            sample_id=metadata.sample_id,
-            trace_id=metadata.trace_id,
-            worker_id=runtime.worker_id,
-            stage_id=runtime.partition_id,
-            exit_id=int(output.exit_id),
-            predicted_class=predicted_class,
-            confidence=confidence,
-            logits_shape=logits_shape,
-            logits_dtype=logits_dtype,
+        if output.status in {RESPONSE_STATUS_EXITED, RESPONSE_STATUS_COMPLETED}:
+            logits = _extract_logits_cpu(output.logits)
+            predicted_class, confidence = _compute_prediction_summary(logits)
+
+            logits_shape = list(logits.shape)
+            logits_dtype = torch_dtype_to_str(logits.dtype)
+
+            local_response_bytes = _estimate_terminal_response_bytes(
+                request_id=current_metadata.request_id,
+                sample_id=current_metadata.sample_id,
+                trace_id=current_metadata.trace_id,
+                worker_id=runtime.worker_id,
+                stage_id=current_partition_id,
+                exit_id=int(output.exit_id),
+                predicted_class=predicted_class,
+                confidence=confidence,
+                logits_shape=logits_shape,
+                logits_dtype=logits_dtype,
+            )
+            local_response_bytes_total += int(local_response_bytes)
+
+            local_stage_metrics.append(
+                StageMetric(
+                    worker_id=runtime.worker_id,
+                    stage_id=current_partition_id,
+                    model_instance_id=model_instance_id,
+                    compute_time_sec=local_compute_time_sec,
+                    request_bytes=int(current_inbound_request_bytes),
+                    response_bytes=int(local_response_bytes),
+                )
+            )
+            local_path.append(runtime.worker_id)
+
+            return TerminalInferenceResponse(
+                status=output.status,
+                request_id=current_metadata.request_id,
+                sample_id=current_metadata.sample_id,
+                trace_id=current_metadata.trace_id,
+                model_instance_id=model_instance_id,
+                worker_id=runtime.worker_id,
+                stage_id=current_partition_id,
+                exit_id=int(output.exit_id),
+                predicted_class=predicted_class,
+                confidence=confidence,
+                logits_shape=logits_shape,
+                logits_dtype=logits_dtype,
+                compute_time_sec=local_compute_time_sec,
+                stage_metrics=local_stage_metrics,
+                path=local_path,
+                total_request_bytes=int(local_request_bytes_total),
+                total_response_bytes=int(local_response_bytes_total),
+                total_protocol_bytes=int(
+                    local_request_bytes_total + local_response_bytes_total
+                ),
+                total_remote_compute_time_sec=local_compute_time_total,
+                timestamp_completed_ns=time.time_ns(),
+            )
+
+        next_route_entry = runtime.resolve_next_route_entry(
+            model_instance_id,
+            current_partition_id,
+        )
+        if next_route_entry is None:
+            raise RuntimeError(
+                f"Worker {runtime.worker_id} produced non-terminal status "
+                f"'{output.status}' at stage {current_partition_id} but no next "
+                "worker is configured"
+            )
+
+        activation = _extract_activation_cpu(output.activation)
+        activation_bytes, activation_shape, activation_dtype = tensor_to_bytes(activation)
+
+        next_worker_cfg = runtime.get_worker_cfg(next_route_entry.worker_id)
+        next_after_next = runtime.peek_next_route_entry(
+            model_instance_id,
+            int(next_route_entry.partition_id),
         )
 
-        local_stage_metric = StageMetric(
-            worker_id=runtime.worker_id,
-            stage_id=runtime.partition_id,
+        next_metadata = InferenceRequestMetadata(
+            request_id=current_metadata.request_id,
+            sample_id=current_metadata.sample_id,
+            trace_id=current_metadata.trace_id,
             model_instance_id=model_instance_id,
-            compute_time_sec=local_compute_time_sec,
-            request_bytes=int(inbound_request_bytes),
-            response_bytes=int(local_response_bytes),
+            request_kind=REQUEST_KIND_ACTIVATION,
+            stage_id=int(next_route_entry.partition_id),
+            origin_node=current_metadata.origin_node,
+            current_node=str(next_route_entry.worker_id),
+            next_node=(
+                str(next_after_next.worker_id) if next_after_next is not None else None
+            ),
+            tensor_shape=activation_shape,
+            tensor_dtype=activation_dtype,
+            tensor_layout=current_metadata.tensor_layout,
+            model_name=current_metadata.model_name,
+            exit_policy=current_metadata.exit_policy,
+            timestamp_sent_ns=time.time_ns(),
         )
 
-        terminal = TerminalInferenceResponse(
-            status=output.status,
-            request_id=metadata.request_id,
-            sample_id=metadata.sample_id,
-            trace_id=metadata.trace_id,
-            model_instance_id=model_instance_id,
-            worker_id=runtime.worker_id,
-            stage_id=runtime.partition_id,
-            exit_id=int(output.exit_id),
-            predicted_class=predicted_class,
-            confidence=confidence,
-            logits_shape=logits_shape,
-            logits_dtype=logits_dtype,
-            compute_time_sec=local_compute_time_sec,
-            stage_metrics=[local_stage_metric],
-            path=[runtime.worker_id],
-            total_request_bytes=int(inbound_request_bytes),
-            total_response_bytes=int(local_response_bytes),
-            total_protocol_bytes=int(inbound_request_bytes + local_response_bytes),
-            total_remote_compute_time_sec=local_compute_time_sec,
-            timestamp_completed_ns=time.time_ns(),
-        )
-        return terminal
+        if str(next_route_entry.worker_id) == runtime.worker_id:
+            local_stage_metrics.append(
+                StageMetric(
+                    worker_id=runtime.worker_id,
+                    stage_id=current_partition_id,
+                    model_instance_id=model_instance_id,
+                    compute_time_sec=local_compute_time_sec,
+                    request_bytes=int(current_inbound_request_bytes),
+                    response_bytes=0,
+                )
+            )
+            local_path.append(runtime.worker_id)
+            current_metadata = next_metadata
+            current_tensor = activation
+            current_inbound_request_bytes = 0
+            continue
 
-    if runtime.next_worker_cfg is None:
-        raise RuntimeError(
-            f"Worker {runtime.worker_id} produced non-terminal status "
-            f"'{output.status}' but no next worker is configured"
+        downstream_terminal, outbound_request_bytes, _ = infer_remote(
+            worker_cfg=next_worker_cfg,
+            metadata=next_metadata,
+            tensor_bytes=activation_bytes,
         )
 
-    activation = _extract_activation_cpu(output.activation)
-    activation_bytes, activation_shape, activation_dtype = tensor_to_bytes(activation)
+        response_bytes_from_this_stage = int(outbound_request_bytes)
+        local_response_bytes_total += response_bytes_from_this_stage
 
-    next_metadata = InferenceRequestMetadata(
-        request_id=metadata.request_id,
-        sample_id=metadata.sample_id,
-        trace_id=metadata.trace_id,
-        model_instance_id=model_instance_id,
-        request_kind=REQUEST_KIND_ACTIVATION,
-        stage_id=runtime.partition_id + 1,
-        origin_node=metadata.origin_node,
-        current_node=str(runtime.next_worker_cfg["worker_id"]),
-        next_node=runtime.next_worker_cfg.get("next_worker_id"),
-        tensor_shape=activation_shape,
-        tensor_dtype=activation_dtype,
-        tensor_layout=metadata.tensor_layout,
-        model_name=metadata.model_name,
-        exit_policy=metadata.exit_policy,
-        timestamp_sent_ns=time.time_ns(),
-    )
+        local_stage_metrics.append(
+            StageMetric(
+                worker_id=runtime.worker_id,
+                stage_id=current_partition_id,
+                model_instance_id=model_instance_id,
+                compute_time_sec=local_compute_time_sec,
+                request_bytes=int(current_inbound_request_bytes),
+                response_bytes=response_bytes_from_this_stage,
+            )
+        )
+        local_path.append(runtime.worker_id)
 
-    downstream_terminal, outbound_request_bytes, _ = infer_remote(
-        worker_cfg=runtime.next_worker_cfg,
-        metadata=next_metadata,
-        tensor_bytes=activation_bytes,
-    )
+        stage_metrics = [*local_stage_metrics, *downstream_terminal.stage_metrics]
+        path = [*local_path, *downstream_terminal.path]
 
-    response_bytes_from_this_stage = int(outbound_request_bytes)
+        total_request_bytes = int(local_request_bytes_total) + int(
+            downstream_terminal.total_request_bytes
+        )
+        total_response_bytes = int(local_response_bytes_total) + int(
+            downstream_terminal.total_response_bytes
+        )
+        total_protocol_bytes = total_request_bytes + total_response_bytes
+        total_remote_compute_time_sec = local_compute_time_total + float(
+            downstream_terminal.total_remote_compute_time_sec
+        )
 
-    local_stage_metric = StageMetric(
-        worker_id=runtime.worker_id,
-        stage_id=runtime.partition_id,
-        model_instance_id=model_instance_id,
-        compute_time_sec=local_compute_time_sec,
-        request_bytes=int(inbound_request_bytes),
-        response_bytes=response_bytes_from_this_stage,
-    )
-
-    stage_metrics = [local_stage_metric, *downstream_terminal.stage_metrics]
-    path = [runtime.worker_id, *downstream_terminal.path]
-
-    total_request_bytes = int(inbound_request_bytes) + int(
-        downstream_terminal.total_request_bytes
-    )
-    total_response_bytes = response_bytes_from_this_stage + int(
-        downstream_terminal.total_response_bytes
-    )
-    total_protocol_bytes = total_request_bytes + total_response_bytes
-    total_remote_compute_time_sec = (
-        local_compute_time_sec + float(downstream_terminal.total_remote_compute_time_sec)
-    )
-
-    enriched_terminal = TerminalInferenceResponse(
-        status=downstream_terminal.status,
-        request_id=downstream_terminal.request_id,
-        sample_id=downstream_terminal.sample_id,
-        trace_id=downstream_terminal.trace_id,
-        model_instance_id=downstream_terminal.model_instance_id,
-        worker_id=downstream_terminal.worker_id,
-        stage_id=downstream_terminal.stage_id,
-        exit_id=downstream_terminal.exit_id,
-        predicted_class=downstream_terminal.predicted_class,
-        confidence=downstream_terminal.confidence,
-        logits_shape=downstream_terminal.logits_shape,
-        logits_dtype=downstream_terminal.logits_dtype,
-        compute_time_sec=downstream_terminal.compute_time_sec,
-        stage_metrics=stage_metrics,
-        path=path,
-        total_request_bytes=total_request_bytes,
-        total_response_bytes=total_response_bytes,
-        total_protocol_bytes=total_protocol_bytes,
-        total_remote_compute_time_sec=total_remote_compute_time_sec,
-        timestamp_completed_ns=downstream_terminal.timestamp_completed_ns,
-    )
-    return enriched_terminal
+        return TerminalInferenceResponse(
+            status=downstream_terminal.status,
+            request_id=downstream_terminal.request_id,
+            sample_id=downstream_terminal.sample_id,
+            trace_id=downstream_terminal.trace_id,
+            model_instance_id=downstream_terminal.model_instance_id,
+            worker_id=downstream_terminal.worker_id,
+            stage_id=downstream_terminal.stage_id,
+            exit_id=downstream_terminal.exit_id,
+            predicted_class=downstream_terminal.predicted_class,
+            confidence=downstream_terminal.confidence,
+            logits_shape=downstream_terminal.logits_shape,
+            logits_dtype=downstream_terminal.logits_dtype,
+            compute_time_sec=downstream_terminal.compute_time_sec,
+            stage_metrics=stage_metrics,
+            path=path,
+            total_request_bytes=total_request_bytes,
+            total_response_bytes=total_response_bytes,
+            total_protocol_bytes=total_protocol_bytes,
+            total_remote_compute_time_sec=total_remote_compute_time_sec,
+            timestamp_completed_ns=downstream_terminal.timestamp_completed_ns,
+        )
 
 
 def _extract_logits_cpu(logits: torch.Tensor | None) -> torch.Tensor:

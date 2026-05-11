@@ -70,9 +70,15 @@ def run_chained_inference(
 
     for metric in terminal.stage_metrics:
         worker_id = str(metric.worker_id)
-        worker_compute_times[worker_id] = float(metric.compute_time_sec)
-        stage_request_bytes[worker_id] = int(metric.request_bytes)
-        stage_response_bytes[worker_id] = int(metric.response_bytes)
+        worker_compute_times[worker_id] = float(
+            worker_compute_times.get(worker_id, 0.0)
+        ) + float(metric.compute_time_sec)
+        stage_request_bytes[worker_id] = int(
+            stage_request_bytes.get(worker_id, 0)
+        ) + int(metric.request_bytes)
+        stage_response_bytes[worker_id] = int(
+            stage_response_bytes.get(worker_id, 0)
+        ) + int(metric.response_bytes)
 
     protocol_bytes = int(terminal.total_protocol_bytes)
     if protocol_bytes <= 0:

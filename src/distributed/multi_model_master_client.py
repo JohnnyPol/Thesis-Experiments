@@ -23,7 +23,12 @@ from src.distributed.master_client import (
     _get_ordered_worker_cfgs,
     _make_stage_metric_maps,
 )
-from src.distributed.runtime.worker_runtime import resolve_model_instance_ids
+from src.distributed.runtime.worker_runtime import (
+    resolve_model_instance_ids,
+    resolve_placement_routes,
+    resolve_worker_assignments,
+    validate_placement_config,
+)
 from src.inference.partition_runner import run_chained_inference
 from src.metrics.accuracy import compute_accuracy
 from src.metrics.exits import (
@@ -131,6 +136,8 @@ def _run_one_inference(
         communication_overhead_sec / latency if latency > 0.0 else 0.0
     )
 
+    path = list(distributed_output.get("path", []))
+
     return {
         "model_instance_id": model_instance_id,
         "sample_index": sample_index,
@@ -145,7 +152,10 @@ def _run_one_inference(
         "remote_compute_time_sec": remote_compute_time_sec,
         "communication_overhead_sec": communication_overhead_sec,
         "communication_overhead_ratio": communication_overhead_ratio,
-        "path": "->".join(distributed_output.get("path", [])),
+        "path": "->".join(path),
+        "entry_worker_id": str(entry_worker_cfg["worker_id"]),
+        "terminal_worker_id": str(path[-1]) if path else "",
+        "assigned_partition_id": int(entry_worker_cfg.get("partition_id", 0)),
         "worker_compute_times": distributed_output["worker_compute_times"],
         "stage_request_bytes": distributed_output["stage_request_bytes"],
         "stage_response_bytes": distributed_output["stage_response_bytes"],
@@ -157,7 +167,7 @@ def _run_warmup(
     model_instance_ids: list[str],
     sample_records: list[tuple[int, torch.Tensor, int]],
     warmup_samples: int,
-    entry_worker_cfg: dict[str, Any],
+    entry_worker_cfgs_by_model: dict[str, dict[str, Any]],
     timeout_sec: float,
     concurrency: int,
 ) -> None:
@@ -179,13 +189,50 @@ def _run_warmup(
                         sample_index=sample_index,
                         image_tensor=image_tensor,
                         label_value=label_value,
-                        entry_worker_cfg=entry_worker_cfg,
+                        entry_worker_cfg=entry_worker_cfgs_by_model[
+                            model_instance_id
+                        ],
                         timeout_sec=timeout_sec,
                     )
                 )
 
         for future in as_completed(futures):
             future.result()
+
+
+def _build_worker_cfg_by_id(
+    worker_cfgs: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    return {str(worker_cfg["worker_id"]): worker_cfg for worker_cfg in worker_cfgs}
+
+
+def _resolve_entry_worker_cfgs_by_model(
+    *,
+    experiment_cfg: dict[str, Any],
+    worker_cfgs: list[dict[str, Any]],
+    model_instance_ids: list[str],
+) -> dict[str, dict[str, Any]]:
+    routes = resolve_placement_routes(experiment_cfg)
+    if not routes:
+        return {model_instance_id: worker_cfgs[0] for model_instance_id in model_instance_ids}
+
+    worker_cfg_by_id = _build_worker_cfg_by_id(worker_cfgs)
+    entry_cfgs: dict[str, dict[str, Any]] = {}
+    for model_instance_id in model_instance_ids:
+        route = routes.get(model_instance_id)
+        if not route:
+            raise ValueError(f"No placement route configured for {model_instance_id}")
+        first_entry = route[0]
+        if first_entry.worker_id not in worker_cfg_by_id:
+            raise ValueError(
+                f"Route for {model_instance_id} references unknown entry worker "
+                f"{first_entry.worker_id}"
+            )
+        cfg = dict(worker_cfg_by_id[first_entry.worker_id])
+        cfg["partition_id"] = int(first_entry.partition_id)
+        cfg["next_worker_id"] = str(route[1].worker_id) if len(route) > 1 else None
+        entry_cfgs[model_instance_id] = cfg
+    return entry_cfgs
 
 
 def save_results(
@@ -219,6 +266,10 @@ def evaluate_multi_model_distributed_ee(
     show_progress: bool = True,
 ) -> tuple[dict[str, Any], pd.DataFrame]:
     worker_cfgs = _get_ordered_worker_cfgs(system_cfg)
+    validate_placement_config(
+        experiment_cfg=experiment_cfg,
+        system_cfg=system_cfg,
+    )
     num_workers = len(worker_cfgs)
     if num_workers not in {2, 3}:
         raise ValueError(
@@ -229,8 +280,9 @@ def evaluate_multi_model_distributed_ee(
         experiment_cfg=experiment_cfg,
         system_cfg=system_cfg,
     )
+    placement_enabled = bool(resolve_placement_routes(experiment_cfg))
     expected_instances = max(num_workers - 1, 1)
-    if len(model_instance_ids) != expected_instances:
+    if not placement_enabled and len(model_instance_ids) != expected_instances:
         raise ValueError(
             f"Experiment 2 expects N-1 model instances for N workers. "
             f"Got {len(model_instance_ids)} model instances for {num_workers} workers."
@@ -267,12 +319,16 @@ def evaluate_multi_model_distributed_ee(
             if len(warmup_records) >= warmup_samples:
                 break
 
-    entry_worker_cfg = worker_cfgs[0]
+    entry_worker_cfgs_by_model = _resolve_entry_worker_cfgs_by_model(
+        experiment_cfg=experiment_cfg,
+        worker_cfgs=worker_cfgs,
+        model_instance_ids=model_instance_ids,
+    )
     _run_warmup(
         model_instance_ids=model_instance_ids,
         sample_records=warmup_records,
         warmup_samples=warmup_samples,
-        entry_worker_cfg=entry_worker_cfg,
+        entry_worker_cfgs_by_model=entry_worker_cfgs_by_model,
         timeout_sec=timeout_sec,
         concurrency=concurrency,
     )
@@ -346,7 +402,9 @@ def evaluate_multi_model_distributed_ee(
                             sample_index=sample_index,
                             image_tensor=image_tensor,
                             label_value=label_value,
-                            entry_worker_cfg=entry_worker_cfg,
+                            entry_worker_cfg=entry_worker_cfgs_by_model[
+                                model_instance_id
+                            ],
                             timeout_sec=timeout_sec,
                         )
                     )
@@ -520,6 +578,18 @@ def evaluate_multi_model_distributed_ee(
     results.update(latency_stats)
     results.update(summarize_exit_counts(exit_counts, total))
 
+    placement_routes = resolve_placement_routes(experiment_cfg)
+    placement_assignments = resolve_worker_assignments(experiment_cfg)
+    if placement_routes:
+        runtime_cfg = experiment_cfg.get("runtime", {})
+        placement_cfg = experiment_cfg.get("placement", {})
+        results["placement_strategy"] = runtime_cfg.get("placement_strategy")
+        results["spare_worker_id"] = placement_cfg.get("spare_worker_id")
+        for model_instance_id, route in placement_routes.items():
+            results[f"route_{model_instance_id}"] = "->".join(
+                entry.worker_id for entry in route
+            )
+
     for model_instance_id in model_instance_ids:
         model_rows = per_model_rows[model_instance_id]
         model_total = len(model_rows)
@@ -577,6 +647,19 @@ def evaluate_multi_model_distributed_ee(
         results[f"{worker_id}_response_bytes_total"] = resp_total
         results[f"{worker_id}_carbon_kg"] = worker_carbon_kg
         results[f"{worker_id}_energy_kWh"] = worker_energy_kwh
+
+        if placement_assignments:
+            assigned = placement_assignments.get(worker_id, [])
+            results[f"{worker_id}_assigned_partitions"] = ",".join(
+                f"{model_instance_id}:stage_{partition_id}"
+                for model_instance_id, partition_id in assigned
+            )
+            for partition_id in range(num_workers):
+                results[f"{worker_id}_num_stage_{partition_id}_partitions"] = sum(
+                    1
+                    for _, assigned_partition_id in assigned
+                    if int(assigned_partition_id) == partition_id
+                )
 
         if worker_carbon_kg is not None:
             worker_carbon_total += float(worker_carbon_kg)

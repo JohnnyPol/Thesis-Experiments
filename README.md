@@ -13,12 +13,13 @@ final defined experiment design:
 - **Experiment 2**: homogeneous distributed early-exit inference where `N-1`
   logical model instances share an `N`-worker pipeline.
 - **Experiment 3**: memory-aware multi-model partition placement for two
-  early-exit ResNet-18 model instances on three workers, with `worker3` used as
-  the spare late-stage worker.
+  early-exit ResNet-18 model instances on three workers, with the two
+  high-traffic first partitions split across `worker1` and `worker2`, and
+  `worker3` used for the later partitions.
 
-`configs/experiments/exp3.yaml` currently exists as an empty placeholder. The
-Experiment 3 placement and routing design are documented below, but the runtime
-changes for per-model routing are not yet implemented in the current codebase.
+`configs/experiments/exp3.yaml` contains the intended Experiment 3 placement
+and routing metadata, but the runtime changes for per-model routing are not yet
+implemented in the current codebase.
 
 ## Experiment Catalog
 
@@ -31,7 +32,7 @@ changes for per-model routing are not yet implemented in the current codebase.
 | `exp1_5` | EE heterogeneous 2 workers | EE ResNet-18 | Raspberry Pi CPU + Jetson GPU final stage | `src.distributed.master_client` | `results/exp1_single_model/05_heterogeneous_pi_jetson_2workers/run_001/` |
 | `exp1_6` | EE heterogeneous 3 workers | EE ResNet-18 | two Raspberry Pi CPU workers + Jetson GPU final stage | `src.distributed.master_client` | `results/exp1_single_model/06_heterogeneous_2pis_jetson_3workers/run_001/` |
 | `exp2` | Homogeneous multi-model EE | EE ResNet-18 | three homogeneous CPU workers, two logical models by default | `src.distributed.multi_model_master_client` | `results/exp2_multi_model/01_homogeneous_3workers_2models/run_001/` |
-| `exp3` | Memory-aware multi-model placement | EE ResNet-18 | two logical models, three workers, cross-model placement with `worker3` as spare late-stage worker | planned per-model routing master/runtime | `results/exp3_memory_aware_multi_model/01_3workers_2models_spare_late/run_001/` |
+| `exp3` | Memory-aware multi-model placement | EE ResNet-18 | two logical models, three workers, first partitions split across `worker1` and `worker2`, later partitions on `worker3` | planned per-model routing master/runtime | `results/exp3_memory_aware_multi_model/01_3workers_2models_first_split_late_consolidated/run_001/` |
 
 ## What Is Measured
 
@@ -348,11 +349,11 @@ size as Experiment 2:
 3 workers
 2 logical early-exit ResNet-18 model instances
 3 partitions per model
-worker3 = spare / late-stage worker
+worker3 = consolidated later-partition worker
 ```
 
-The motivation is to reduce per-worker model memory pressure and improve worker
-utilization. In Experiment 2, the placement is stage-parallel for every model:
+The motivation is to keep the high-traffic first partitions off a single
+Raspberry Pi. In Experiment 2, the placement is stage-parallel for every model:
 
 ```text
 worker1:
@@ -376,40 +377,39 @@ Experiment 3 uses a memory-aware cross-model placement:
 ```text
 worker1:
   model_0 stage_0
-  model_1 stage_1
 
 worker2:
   model_1 stage_0
-  model_0 stage_1
 
 worker3:
+  model_0 stage_1
   model_0 stage_2
+  model_1 stage_1
   model_1 stage_2
 ```
 
 This placement enforces the core constraints:
 
-- each worker manages at most one first-stage model partition
-- each worker manages at most one second-stage model partition
-- the spare worker, `worker3`, manages the deeper third-stage partitions that
-  receive fewer samples because earlier exits progressively reduce traffic
+- each Raspberry Pi handles at most one first-stage model partition
+- `worker3` manages the deeper second- and third-stage partitions that receive
+  fewer samples because earlier exits progressively reduce traffic
 
 The resulting per-model routes are:
 
 ```text
-model_0: worker1 stage_0 -> worker2 stage_1 -> worker3 stage_2
-model_1: worker2 stage_0 -> worker1 stage_1 -> worker3 stage_2
+model_0: worker1 stage_0 -> worker3 stage_1 -> worker3 stage_2
+model_1: worker2 stage_0 -> worker3 stage_1 -> worker3 stage_2
 ```
 
 The planned thesis comparison is against Experiment 2. The expected effect is a
-lower first-stage memory concentration on `worker1`, better compute balance
-between `worker1` and `worker2`, and explicit use of `worker3` as the spare
-late-stage node. The tradeoff to measure is additional cross-model routing and
-its impact on communication overhead.
+lower first-stage traffic concentration on `worker1` and explicit use of
+`worker3` for later, lower-traffic work. The tradeoff to measure is additional
+traffic to `worker3` and its impact on communication overhead.
 
 The current runtime still assumes a static worker pipeline for each system
-config. Experiment 3 requires per-model routing, where the next worker is chosen
-from `(model_instance_id, current_stage_id)` instead of a single static
+config unless an experiment defines a `placement` block. Experiment 3 enables
+placement-aware routing, where the next worker is chosen from
+`(model_instance_id, current_stage_id)` instead of a single static
 `next_worker_id`.
 
 An intended config shape is:
@@ -427,7 +427,7 @@ runtime:
   max_samples_per_model: null
   save_per_sample_metrics: true
   save_predictions: false
-  placement_strategy: explicit_memory_aware
+  placement_strategy: explicit_first_partition_split
 
 placement:
   spare_worker_id: worker3
@@ -435,36 +435,50 @@ placement:
     worker1:
       - model_instance_id: model_0
         partition_id: 0
-      - model_instance_id: model_1
-        partition_id: 1
     worker2:
       - model_instance_id: model_1
         partition_id: 0
-      - model_instance_id: model_0
-        partition_id: 1
     worker3:
       - model_instance_id: model_0
+        partition_id: 1
+      - model_instance_id: model_0
         partition_id: 2
+      - model_instance_id: model_1
+        partition_id: 1
       - model_instance_id: model_1
         partition_id: 2
   routes:
     model_0:
       - worker_id: worker1
         partition_id: 0
-      - worker_id: worker2
+      - worker_id: worker3
         partition_id: 1
       - worker_id: worker3
         partition_id: 2
     model_1:
       - worker_id: worker2
         partition_id: 0
-      - worker_id: worker1
+      - worker_id: worker3
         partition_id: 1
       - worker_id: worker3
         partition_id: 2
   constraints:
     max_first_partitions_per_worker: 1
-    max_second_partitions_per_worker: 1
+    later_partitions_worker_id: worker3
+```
+
+Start one worker service per worker:
+
+```bash
+bash scripts/run/start_worker_api.sh configs/experiments/exp3.yaml worker1
+bash scripts/run/start_worker_api.sh configs/experiments/exp3.yaml worker2
+bash scripts/run/start_worker_api.sh configs/experiments/exp3.yaml worker3
+```
+
+Run the Experiment 3 master:
+
+```bash
+bash scripts/run/run_exp3_memory_aware_multi_model.sh
 ```
 
 ## How Distributed Inference Works
@@ -601,8 +615,8 @@ files change.
 - Distributed partitioning currently supports 2-worker and 3-worker topologies.
 - Experiment 2 validates that the number of logical model instances equals
   `N-1` for `N` workers.
-- Experiment 3 is documented but not yet implemented. It requires per-model
-  route lookup, per-worker multi-partition loading, and placement-aware metrics.
+- Experiment 3 uses the `placement` block for per-model route lookup,
+  per-worker multi-partition loading, and placement-aware route metrics.
 - Protocol byte accounting is a stable estimate built from tensor payload sizes,
   metadata size, headers, and fixed HTTP/multipart overhead constants; it is not
   packet-capture data.

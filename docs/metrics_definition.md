@@ -201,9 +201,9 @@ Experiment 3 per-sample rows should also preserve the chosen route:
 
 These fields make it possible to verify that:
 
-- `model_0` follows `worker1 -> worker2 -> worker3`
-- `model_1` follows `worker2 -> worker1 -> worker3`
-- `worker3` receives the late-stage traffic for both models
+- `model_0` follows `worker1 -> worker3 -> worker3`
+- `model_1` follows `worker2 -> worker3 -> worker3`
+- `worker3` receives the second- and third-stage traffic for both models
 
 ## Thesis Tables
 
