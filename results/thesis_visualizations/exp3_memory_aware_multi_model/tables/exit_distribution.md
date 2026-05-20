@@ -1,0 +1,3 @@
+| experiment | topology | exit_0_ratio | exit_1_ratio | exit_2_ratio | exit_3_ratio |
+| --- | --- | --- | --- | --- | --- |
+| exp3 | Memory-Aware Multi-Model | 0.6818 | 0.2404 | 0.0615 | 0.0163 |

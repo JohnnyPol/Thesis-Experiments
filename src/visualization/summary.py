@@ -98,6 +98,7 @@ def infer_topology_label(row: dict[str, Any]) -> str:
         "exp1_5": "Heterogeneous Pi + Jetson",
         "exp1_6": "Heterogeneous 2 Pis + Jetson",
         "exp2": "Homogeneous Multi-Model",
+        "exp3": "Memory-Aware Multi-Model",
     }
     return mapping.get(experiment_id, experiment_id or str(row.get("system_name", "Unknown")))
 
@@ -114,6 +115,8 @@ def infer_category(row: dict[str, Any]) -> str:
         return "distributed_heterogeneous"
     if experiment_id == "exp2":
         return "distributed_multi_model"
+    if experiment_id == "exp3":
+        return "distributed_memory_aware_multi_model"
     return "other"
 
 
