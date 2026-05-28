@@ -5,6 +5,65 @@ thesis visualization tools for evaluating baseline ResNet and early-exit
 ResNet inference across single-node, distributed single-model, and distributed
 multi-model deployments.
 
+## Environment Setup
+
+Run the setup script:
+
+```bash
+scripts/setup_environment.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+.\scripts\setup_environment.ps1
+```
+
+To force installation of CPU PyTorch and TorchVision:
+
+```bash
+scripts/setup_environment.sh --with-torch
+```
+
+Or on Windows PowerShell:
+
+```powershell
+.\scripts\setup_environment.ps1 -WithTorch
+```
+
+Create and activate a virtual environment:
+
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+Install the repository dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Install PyTorch and TorchVision separately when needed for Raspberry Pi CPU
+execution:
+
+```bash
+python -m pip install \
+  --index-url https://download.pytorch.org/whl/cpu \
+  --extra-index-url https://www.piwheels.org/simple \
+  torch
+
+pip install torchvision --no-cache-dir \
+  --index-url https://download.pytorch.org/whl/cpu \
+  --extra-index-url https://www.piwheels.org/simple
+```
+
+Set the project root on `PYTHONPATH` before running modules manually:
+
+```bash
+export PYTHONPATH="$(pwd)"
+```
+
 ## Experiment Catalog
 
 | ID | Config | Model | Topology | Entrypoint |
@@ -64,20 +123,13 @@ corresponding experiment.
 Single-node runs:
 
 ```bash
-# Run all baseline variants.
-bash scripts/run/run_exp1_1_baseline_single_node.sh
+# Run baseline variants by dataset.
+bash scripts/run/run_exp1_1_baseline_single_node_cifar10.sh
+bash scripts/run/run_exp1_1_baseline_single_node_cifar100.sh
 
-# Run all single-node early-exit variants.
-bash scripts/run/run_exp1_2_ee_single_node.sh
-
-# Run individual single-node variants.
-bash scripts/run/run_exp1_1_resnet18_baseline_single_node.sh
-bash scripts/run/run_exp1_1_resnet34_baseline_single_node.sh
-bash scripts/run/run_exp1_2_resnet18_ee_single_node.sh
-bash scripts/run/run_exp1_2_resnet34_ee_single_node.sh
-
-# Run an individual CIFAR-100 variant.
-bash scripts/run/run_exp1_1_resnet18_baseline_single_node.sh configs/experiments/exp1_1_resnet18_baseline_single_node_cifar100.yaml
+# Run single-node early-exit variants by dataset.
+bash scripts/run/run_exp1_2_ee_single_node_cifar10.sh
+bash scripts/run/run_exp1_2_ee_single_node_cifar100.sh
 ```
 
 Distributed workers:
@@ -96,17 +148,17 @@ model/dataset.
 Distributed masters:
 
 ```bash
-bash scripts/run/run_exp1_3_ee_3nodes.sh
-bash scripts/run/run_exp1_3_ee_3nodes.sh configs/experiments/exp1_3_resnet34_ee_3nodes_cifar10.yaml
-bash scripts/run/run_exp2_multi_model.sh
-bash scripts/run/run_exp2_multi_model.sh configs/experiments/exp2_resnet34_cifar10.yaml
-bash scripts/run/run_exp2_multi_model.sh configs/experiments/exp2_resnet18_cifar100.yaml
-bash scripts/run/run_exp3_memory_aware_multi_model.sh
-bash scripts/run/run_exp3_memory_aware_multi_model.sh configs/experiments/exp3_1_resnet34_cifar10.yaml
-bash scripts/run/run_exp3_memory_aware_multi_model.sh configs/experiments/exp3_2_resnet18_cifar10.yaml
-bash scripts/run/run_exp3_memory_aware_multi_model.sh configs/experiments/exp3_2_resnet34_cifar10.yaml
-bash scripts/run/run_exp3_memory_aware_multi_model.sh configs/experiments/exp3_3_resnet18_cifar10.yaml
-bash scripts/run/run_exp3_memory_aware_multi_model.sh configs/experiments/exp3_3_resnet34_cifar10.yaml
+bash scripts/run/run_exp1_3_ee_3nodes_cifar10.sh
+bash scripts/run/run_exp1_3_ee_3nodes_cifar100.sh
+bash scripts/run/run_exp2_homogeneous_multi_model_cifar10.sh
+bash scripts/run/run_exp2_homogeneous_multi_model_cifar100.sh
+bash scripts/run/run_exp3_memory_aware_multi_model_cifar10.sh
+bash scripts/run/run_exp3_memory_aware_multi_model_cifar100.sh
+
+# The distributed scripts still accept explicit config paths for one-off runs.
+bash scripts/run/run_exp1_3_ee_3nodes_cifar10.sh configs/experiments/exp1_3_resnet34_ee_3nodes_cifar10.yaml
+bash scripts/run/run_exp2_homogeneous_multi_model_cifar100.sh configs/experiments/exp2_resnet18_cifar100.yaml
+bash scripts/run/run_exp3_memory_aware_multi_model_cifar10.sh configs/experiments/exp3_2_resnet34_cifar10.yaml
 ```
 
 ## Thesis Artifacts

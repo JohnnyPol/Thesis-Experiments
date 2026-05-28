@@ -13,25 +13,19 @@ if [[ $# -gt 0 ]]; then
 else
   CONFIG_PATHS=(
     "configs/experiments/exp3_1_resnet18_cifar10.yaml"
-    "configs/experiments/exp3_1_resnet18_cifar100.yaml"
     "configs/experiments/exp3_1_resnet34_cifar10.yaml"
-    "configs/experiments/exp3_1_resnet34_cifar100.yaml"
     "configs/experiments/exp3_2_resnet18_cifar10.yaml"
-    "configs/experiments/exp3_2_resnet18_cifar100.yaml"
     "configs/experiments/exp3_2_resnet34_cifar10.yaml"
-    "configs/experiments/exp3_2_resnet34_cifar100.yaml"
     "configs/experiments/exp3_3_resnet18_cifar10.yaml"
-    "configs/experiments/exp3_3_resnet18_cifar100.yaml"
     "configs/experiments/exp3_3_resnet34_cifar10.yaml"
-    "configs/experiments/exp3_3_resnet34_cifar100.yaml"
   )
 fi
 
-echo "[run_exp3] repo_root=$REPO_ROOT"
+echo "[run_exp3_cifar10] repo_root=$REPO_ROOT"
 
 for CONFIG_PATH in "${CONFIG_PATHS[@]}"; do
-  echo "[run_exp3] config=$CONFIG_PATH"
-  check_workers_for_config "[run_exp3]" "$CONFIG_PATH"
+  echo "[run_exp3_cifar10] config=$CONFIG_PATH"
+  check_workers_for_config "[run_exp3_cifar10]" "$CONFIG_PATH"
 
   python -m src.distributed.multi_model_master_client \
     --config "$CONFIG_PATH"

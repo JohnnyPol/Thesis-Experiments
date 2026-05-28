@@ -25,7 +25,6 @@ EE_MODEL_BUILDERS = {
     ),
     "resnet34": lambda block, num_classes, confidence_threshold: ResNetEE34(
         block,
-        [3, 4, 6, 3],
         num_classes=num_classes,
         confidence_threshold=confidence_threshold,
     ),
@@ -157,28 +156,22 @@ class ResNetEE3WayPartition1(nn.Module):
 class ResNetEE3WayPartition2(nn.Module):
     """
     Stage 2:
-      input activation(after layer2) -> layer3 -> final classifier
+      input activation(after layer2) -> layer3 -> avgpool -> fc(final)
     """
 
     def __init__(self, full_model: FullEarlyExitResNet):
         super().__init__()
         self.layer3 = full_model.layer3
-        self.exit3 = getattr(full_model, "exit3", None)
-        self.avgpool = full_model.avgpool if self.exit3 is None else None
-        self.fc = full_model.fc if self.exit3 is None else None
+        self.avgpool = full_model.avgpool
+        self.fc = full_model.fc
 
     def forward(self, x: torch.Tensor) -> PartitionOutput:
         start = time.time()
 
         x3 = self.layer3(x)
-        if self.exit3 is not None:
-            out_final = self.exit3(x3)
-        else:
-            if self.avgpool is None or self.fc is None:
-                raise RuntimeError("Missing final classifier for partition 2")
-            xf = self.avgpool(x3)
-            xf = torch.flatten(xf, 1)
-            out_final = self.fc(xf)
+        xf = self.avgpool(x3)
+        xf = torch.flatten(xf, 1)
+        out_final = self.fc(xf)
 
         return PartitionOutput(
             status="completed",
