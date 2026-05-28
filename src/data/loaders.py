@@ -8,6 +8,22 @@ from torch.utils.data import ConcatDataset, DataLoader
 from torchvision import datasets, transforms
 
 
+DATASET_BUILDERS = {
+    "cifar10": datasets.CIFAR10,
+    "cifar100": datasets.CIFAR100,
+}
+
+
+def _resolve_dataset_builder(dataset_config: dict[str, Any]):
+    dataset_name = str(dataset_config.get("name", "cifar10")).lower()
+    if dataset_name not in DATASET_BUILDERS:
+        supported = ", ".join(sorted(DATASET_BUILDERS))
+        raise ValueError(
+            f"Unsupported dataset '{dataset_name}'. Expected one of: {supported}."
+        )
+    return DATASET_BUILDERS[dataset_name]
+
+
 def _build_normalize_transform(dataset_config: dict[str, Any]) -> transforms.Normalize:
     """
     Build normalization transform from dataset config.
@@ -69,7 +85,7 @@ def data_loader(
     dataset_config: dict[str, Any] | None = None,
 ):
     """
-    Build CIFAR-10 train/validation or test dataloaders.
+    Build CIFAR train/validation or test dataloaders.
 
     Args:
         data_dir: Dataset root path.
@@ -100,10 +116,11 @@ def data_loader(
 
     transform_original = _build_original_transform(dataset_config)
     transform_aug = _build_augmentation_transform(dataset_config)
+    dataset_builder = _resolve_dataset_builder(dataset_config)
 
     if test:
         test_shuffle = dataset_config.get("loader", {}).get("shuffle", False)
-        dataset = datasets.CIFAR10(
+        dataset = dataset_builder(
             root=data_dir,
             train=False,
             download=download,
@@ -117,14 +134,14 @@ def data_loader(
             num_workers=num_workers,
         )
 
-    train_dataset_orig = datasets.CIFAR10(
+    train_dataset_orig = dataset_builder(
         root=data_dir,
         train=True,
         download=download,
         transform=transform_original,
     )
 
-    train_dataset_aug = datasets.CIFAR10(
+    train_dataset_aug = dataset_builder(
         root=data_dir,
         train=True,
         download=download,

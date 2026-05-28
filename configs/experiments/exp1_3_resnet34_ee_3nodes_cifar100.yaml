@@ -1,0 +1,18 @@
+﻿experiment:
+  id: exp1_3_resnet34_cifar100
+  name: resnet34_ee_homogeneous_3nodes_cifar100
+  description: Early-exit ResNet-34 inference distributed across 3 homogeneous worker nodes with layer0+layer1 on worker1, layer2 on worker2, and layer3 on worker3 on CIFAR-100.
+
+config_refs:
+  dataset: configs/datasets/cifar100.yaml
+  model: configs/models/resnet34_ee_entropy_cifar100.yaml
+  system: configs/systems/homogeneous_3workers.yaml
+
+runtime:
+  batch_size: 1
+  warmup_samples: 20
+  save_per_sample_metrics: true
+  save_predictions: false
+
+output:
+  dir: ./results/exp1_single_model/03b_homogeneous_3workers_resnet34_ee_cifar100/run_001

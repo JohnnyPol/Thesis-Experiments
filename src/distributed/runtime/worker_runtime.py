@@ -57,6 +57,7 @@ class WorkerRuntime:
     placement_assignments: dict[str, list[tuple[str, int]]]
     placement_routes: dict[str, list[RouteEntry]]
     model_name: str | None
+    dataset_name: str | None
     exit_policy: str | None
     emissions_monitor: WorkerEmissionsMonitor
 
@@ -291,6 +292,7 @@ def build_worker_runtime(
     port = int(worker_cfg["port"])
     next_worker_id = worker_cfg.get("next_worker_id")
     model_name = model_cfg.get("name")
+    dataset_name = dataset_cfg.get("name")
 
     exit_policy = None
     if isinstance(model_cfg.get("early_exit"), dict):
@@ -352,6 +354,7 @@ def build_worker_runtime(
         placement_assignments=placement_assignments_raw,
         placement_routes=placement_routes,
         model_name=model_name,
+        dataset_name=dataset_name,
         exit_policy=exit_policy,
         emissions_monitor=WorkerEmissionsMonitor(),
     )

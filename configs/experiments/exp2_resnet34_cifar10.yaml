@@ -1,0 +1,21 @@
+﻿experiment:
+  id: exp2_resnet34_cifar10
+  name: homogeneous_multi_model_distributed_resnet34_ee_cifar10
+  description: Two logical early-exit ResNet-34 model instances on a homogeneous 3-worker cluster on CIFAR-10.
+
+config_refs:
+  dataset: configs/datasets/cifar10.yaml
+  model: configs/models/resnet34_ee_entropy_cifar10.yaml
+  system: configs/systems/homogeneous_3workers.yaml
+
+runtime:
+  batch_size: 1
+  warmup_samples: 20
+  model_instance_count: auto
+  concurrency: 2
+  max_samples_per_model: null
+  save_per_sample_metrics: true
+  save_predictions: false
+
+output:
+  dir: ./results/exp2_multi_model/02_homogeneous_3workers_2models_resnet34_cifar10/run_001

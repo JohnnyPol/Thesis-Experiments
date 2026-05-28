@@ -1,7 +1,0 @@
-# Minimal extra dependencies for the isolated Jetson Nano legacy worker path.
-# Install Jetson-compatible torch/torchvision separately from NVIDIA-provided wheels.
-
-numpy
-PyYAML
-requests
-codecarbon

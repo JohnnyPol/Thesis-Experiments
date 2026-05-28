@@ -27,11 +27,8 @@ def run_chained_inference(
             "predicted_class": int,
             "confidence": float | None,
             "exit_id": int,
-            "protocol_bytes": int,
             "remote_compute_time_sec": float,
             "worker_compute_times": {worker_id: float},
-            "stage_request_bytes": {worker_id: int},
-            "stage_response_bytes": {worker_id: int},
             "path": [worker_ids...],
         }
     """
@@ -57,7 +54,7 @@ def run_chained_inference(
         tensor_layout="NCHW",
     )
 
-    terminal, req_bytes, resp_bytes = infer_remote(
+    terminal = infer_remote(
         worker_cfg=entry_worker_cfg,
         metadata=metadata,
         tensor_bytes=tensor_bytes,
@@ -65,24 +62,12 @@ def run_chained_inference(
     )
 
     worker_compute_times: dict[str, float] = {}
-    stage_request_bytes: dict[str, int] = {}
-    stage_response_bytes: dict[str, int] = {}
 
     for metric in terminal.stage_metrics:
         worker_id = str(metric.worker_id)
         worker_compute_times[worker_id] = float(
             worker_compute_times.get(worker_id, 0.0)
         ) + float(metric.compute_time_sec)
-        stage_request_bytes[worker_id] = int(
-            stage_request_bytes.get(worker_id, 0)
-        ) + int(metric.request_bytes)
-        stage_response_bytes[worker_id] = int(
-            stage_response_bytes.get(worker_id, 0)
-        ) + int(metric.response_bytes)
-
-    protocol_bytes = int(terminal.total_protocol_bytes)
-    if protocol_bytes <= 0:
-        protocol_bytes = int(req_bytes + resp_bytes)
 
     remote_compute_time_sec = float(terminal.total_remote_compute_time_sec)
     if remote_compute_time_sec <= 0.0:
@@ -97,10 +82,7 @@ def run_chained_inference(
         else -1,
         "confidence": terminal.confidence,
         "exit_id": int(terminal.exit_id),
-        "protocol_bytes": protocol_bytes,
         "remote_compute_time_sec": remote_compute_time_sec,
         "worker_compute_times": worker_compute_times,
-        "stage_request_bytes": stage_request_bytes,
-        "stage_response_bytes": stage_response_bytes,
         "path": list(terminal.path),
     }

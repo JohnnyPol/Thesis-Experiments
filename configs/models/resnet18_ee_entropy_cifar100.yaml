@@ -1,0 +1,10 @@
+name: resnet18_ee_entropy_cifar100
+type: early_exit
+architecture: resnet18
+
+weights:
+  path: ./checkpoints/resnet18_ee_entropy_cifar100.pth
+
+early_exit:
+  criterion: entropy
+  confidence_threshold: 0.9

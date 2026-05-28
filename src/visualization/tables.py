@@ -141,15 +141,13 @@ def _exit_table(summary_df: pd.DataFrame) -> pd.DataFrame:
 
 def _worker_breakdown_table(summary_df: pd.DataFrame) -> pd.DataFrame:
     def _sort_worker_ids(worker_ids: list[str]) -> list[str]:
-        return sorted(worker_ids, key=lambda worker_id: (worker_id == "jetson", worker_id))
+        return sorted(worker_ids)
 
     def _has_worker_metrics(row: pd.Series, worker_id: str) -> bool:
         metric_keys = [
             f"{worker_id}_compute_time_total_sec",
             f"{worker_id}_compute_time_avg_sec",
             f"{worker_id}_node_utilization",
-            f"{worker_id}_request_bytes_total",
-            f"{worker_id}_response_bytes_total",
             f"{worker_id}_carbon_kg",
             f"{worker_id}_energy_kWh",
         ]
@@ -173,8 +171,6 @@ def _worker_breakdown_table(summary_df: pd.DataFrame) -> pd.DataFrame:
                 total_inference_time_sec = row.get("total_inference_time_sec")
                 if not pd.isna(total_inference_time_sec) and float(total_inference_time_sec) > 0.0:
                     node_utilization = float(compute_time_total) / float(total_inference_time_sec)
-            request_bytes_total = row.get(f"{worker_id}_request_bytes_total")
-            response_bytes_total = row.get(f"{worker_id}_response_bytes_total")
             carbon_kg = row.get(f"{worker_id}_carbon_kg")
             energy_kWh = row.get(f"{worker_id}_energy_kWh")
 
@@ -182,8 +178,6 @@ def _worker_breakdown_table(summary_df: pd.DataFrame) -> pd.DataFrame:
                 compute_time_total = row.get("busy_time_sec")
                 compute_time_avg = row.get("avg_latency_sec")
                 node_utilization = row.get("node_utilization")
-                request_bytes_total = row.get("network_rx_bytes")
-                response_bytes_total = row.get("network_tx_bytes")
                 carbon_kg = row.get("carbon_kg")
                 energy_kWh = row.get("energy_kWh")
 
@@ -195,8 +189,6 @@ def _worker_breakdown_table(summary_df: pd.DataFrame) -> pd.DataFrame:
                     "compute_time_total_sec": compute_time_total,
                     "compute_time_avg_sec": compute_time_avg,
                     "node_utilization": node_utilization,
-                    "request_bytes_total": request_bytes_total,
-                    "response_bytes_total": response_bytes_total,
                     "carbon_kg": carbon_kg,
                     "energy_kWh": energy_kWh,
                 }

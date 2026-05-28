@@ -21,12 +21,31 @@ from src.metrics.latency import (
     compute_throughput,
     compute_total_inference_time,
 )
-from src.metrics.network import compute_network_delta, read_network_bytes
 from src.metrics.utilization import compute_node_utilization
 from src.models.blocks import ResidualBlock
-from src.models.resnet_baseline import ResNet
-from src.models.resnet_ee import ResNetEE18
+from src.models.resnet_baseline import ResNet18, ResNet34
+from src.models.resnet_ee import ResNetEE18, ResNetEE34
 from src.utils.config import load_experiment_bundle, resolve_path
+
+
+BASELINE_MODEL_BUILDERS = {
+    "resnet18": ResNet18,
+    "resnet34": ResNet34,
+}
+
+EE_MODEL_BUILDERS = {
+    "resnet18": lambda block, num_classes, confidence_threshold: ResNetEE18(
+        block,
+        [2, 2, 2, 2],
+        num_classes=num_classes,
+        confidence_threshold=confidence_threshold,
+    ),
+    "resnet34": lambda block, num_classes, confidence_threshold: ResNetEE34(
+        block,
+        num_classes=num_classes,
+        confidence_threshold=confidence_threshold,
+    ),
+}
 
 
 def is_early_exit_model(model_cfg: dict) -> bool:
@@ -93,25 +112,29 @@ def build_model_from_config(
     device: torch.device | str,
 ) -> tuple[torch.nn.Module, str]:
     """
-    Build either baseline ResNet-18 or EE ResNet-18 from config.
+    Build either baseline or early-exit ResNet from config.
     """
     device = torch.device(device)
     model_name = model_cfg.get("name", "model")
+    architecture = str(model_cfg.get("architecture", "resnet18")).lower()
+    if architecture not in BASELINE_MODEL_BUILDERS:
+        raise ValueError(
+            f"Unsupported ResNet architecture '{architecture}'. "
+            f"Expected one of: {', '.join(sorted(BASELINE_MODEL_BUILDERS))}."
+        )
 
     num_classes = extract_num_classes(dataset_cfg, model_cfg)
 
     if is_early_exit_model(model_cfg):
         confidence_threshold = extract_entropy_threshold(model_cfg)
-        model = ResNetEE18(
+        model = EE_MODEL_BUILDERS[architecture](
             ResidualBlock,
-            [2, 2, 2, 2],
-            num_classes=num_classes,
-            confidence_threshold=confidence_threshold,
+            num_classes,
+            confidence_threshold,
         ).to(device)
     else:
-        model = ResNet(
+        model = BASELINE_MODEL_BUILDERS[architecture](
             ResidualBlock,
-            [2, 2, 2, 2],
             num_classes=num_classes,
         ).to(device)
 
@@ -130,7 +153,6 @@ def evaluate_single_node(
     data_dir: str = "./data",
     batch_size: int = 1,
     device: torch.device | str = "cpu",
-    network_interface: str | None = None,
     warmup_samples: int = 0,
     max_samples: int | None = 1,  # infer only 1 sample for now
     show_progress: bool = True,
@@ -190,8 +212,6 @@ def evaluate_single_node(
             num_workers=num_workers,
             dataset_config=dataset_config,
         )
-
-    net_before = read_network_bytes(interface=network_interface)
 
     # Silence CodeCarbon logs
     tracker = EmissionsTracker(
@@ -259,7 +279,6 @@ def evaluate_single_node(
 
     experiment_end = time.time()
     tracker.stop()
-    net_after = read_network_bytes(interface=network_interface)
 
     total_inference_time_sec = compute_total_inference_time(
         experiment_start, experiment_end
@@ -271,7 +290,6 @@ def evaluate_single_node(
         total_inference_time_sec,
     )
     accuracy = compute_accuracy(correct, total)
-    network_stats = compute_network_delta(net_before, net_after)
 
     emissions_data = tracker._prepare_emissions_data()
     carbon_kg = emissions_data.emissions
@@ -288,9 +306,6 @@ def evaluate_single_node(
         "node_utilization": float(node_utilization),
         "carbon_kg": float(carbon_kg) if carbon_kg is not None else None,
         "energy_kWh": float(energy_kwh) if energy_kwh is not None else None,
-        "network_rx_bytes": int(network_stats["rx_bytes"]),
-        "network_tx_bytes": int(network_stats["tx_bytes"]),
-        "network_total_bytes": int(network_stats["total_bytes"]),
     }
     results.update(latency_stats)
 
@@ -370,7 +385,6 @@ def main():
     )
     warmup_samples = experiment_cfg.get("runtime", {}).get("warmup_samples", 0)
     device = system_cfg.get("runtime", {}).get("device", "cpu")
-    network_interface = system_cfg.get("monitoring", {}).get("network_interface", None)
 
     is_ee = is_early_exit_model(model_cfg)
 
@@ -389,7 +403,6 @@ def main():
         data_dir=data_dir,  # type: ignore
         batch_size=batch_size,
         device=device,
-        network_interface=network_interface,
         warmup_samples=warmup_samples,
         max_samples=1,
     )

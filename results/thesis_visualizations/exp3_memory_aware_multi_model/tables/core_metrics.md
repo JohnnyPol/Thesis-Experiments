@@ -1,3 +1,0 @@
-| experiment | topology | accuracy_pct | throughput_samples_per_sec | avg_latency_sec | p95_latency_sec | p99_latency_sec | total_time_sec | communication_overhead_avg_sec | communication_overhead_p95_sec | communication_overhead_ratio_avg | samples |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exp3 | Memory-Aware Multi-Model | 85.32 | 5.333937927280911 | 0.37466094896793367 | 0.5772494554519653 | 0.6688238739967336 | 3749.5749430656433 | 0.14262205612659454 | 0.23715630769729615 | 0.3728489567994301 | 20000 |

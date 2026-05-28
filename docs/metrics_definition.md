@@ -38,32 +38,6 @@ Distributed runs write master, worker, and total fields:
 These values come from CodeCarbon trackers. They should be treated as
 experiment-level estimates, not hardware power-meter readings.
 
-## Network And Protocol Metrics
-
-Single-node runs record operating-system network byte deltas:
-
-- `network_rx_bytes`
-- `network_tx_bytes`
-- `network_total_bytes`
-
-Distributed runs record master network byte deltas:
-
-- `master_network_rx_bytes`
-- `master_network_tx_bytes`
-- `master_network_total_bytes`
-
-Distributed runs also record application-level protocol estimates:
-
-- `protocol_bytes_total`
-- `avg_protocol_bytes_per_sample`
-- `<worker_id>_request_bytes_total`
-- `<worker_id>_response_bytes_total`
-
-Protocol bytes are estimated from metadata size, tensor payload size, request
-headers, terminal JSON response size, and fixed HTTP/multipart overhead
-constants. They are intended for stable run-to-run comparison inside this
-pipeline; they are not packet-capture measurements.
-
 ## Distributed Communication Overhead
 
 Distributed runs record communication overhead as the non-compute portion of the
@@ -127,8 +101,6 @@ Distributed runs aggregate per-worker fields:
 - `<worker_id>_compute_time_total_sec`
 - `<worker_id>_compute_time_avg_sec`
 - `<worker_id>_node_utilization`
-- `<worker_id>_request_bytes_total`
-- `<worker_id>_response_bytes_total`
 - `<worker_id>_carbon_kg`
 - `<worker_id>_energy_kWh`
 
@@ -139,8 +111,7 @@ Where:
     <worker_id>_compute_time_total_sec / total_inference_time_sec
 ```
 
-The per-sample CSV has matching per-worker columns with `_sec`,
-`_request_bytes`, and `_response_bytes` suffixes.
+The per-sample CSV has matching per-worker compute columns with `_sec` suffixes.
 
 ## Multi-Model Metrics
 
@@ -214,7 +185,7 @@ normalize the raw metrics into thesis-friendly views:
   sample count.
 - `energy_metrics`: master, worker, and total energy/carbon fields.
 - `exit_distribution`: exit ratios by experiment.
-- `worker_breakdown`: worker compute, utilization, byte, energy, and carbon values.
+- `worker_breakdown`: worker compute, utilization, energy, and carbon values.
 
 The combined CSV and JSON files preserve the broader raw metric set for custom
 analysis.

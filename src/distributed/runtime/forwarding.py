@@ -28,7 +28,6 @@ def execute_or_forward(
     runtime: WorkerRuntime,
     metadata: InferenceRequestMetadata,
     tensor: torch.Tensor,
-    inbound_request_bytes: int = 0,
 ) -> TerminalInferenceResponse:
     """
     Execute this worker's partition on the given tensor.
@@ -40,12 +39,9 @@ def execute_or_forward(
     model_instance_id = str(metadata.model_instance_id or "model_0")
     current_metadata = metadata
     current_tensor = tensor
-    current_inbound_request_bytes = int(inbound_request_bytes)
 
     local_stage_metrics: list[StageMetric] = []
     local_path: list[str] = []
-    local_request_bytes_total = 0
-    local_response_bytes_total = 0
     local_compute_time_total = 0.0
 
     while True:
@@ -63,7 +59,6 @@ def execute_or_forward(
 
         local_compute_time_sec = float(output.compute_time_sec)
         local_compute_time_total += local_compute_time_sec
-        local_request_bytes_total += int(current_inbound_request_bytes)
 
         if output.status in {RESPONSE_STATUS_EXITED, RESPONSE_STATUS_COMPLETED}:
             logits = _extract_logits_cpu(output.logits)
@@ -72,28 +67,12 @@ def execute_or_forward(
             logits_shape = list(logits.shape)
             logits_dtype = torch_dtype_to_str(logits.dtype)
 
-            local_response_bytes = _estimate_terminal_response_bytes(
-                request_id=current_metadata.request_id,
-                sample_id=current_metadata.sample_id,
-                trace_id=current_metadata.trace_id,
-                worker_id=runtime.worker_id,
-                stage_id=current_partition_id,
-                exit_id=int(output.exit_id),
-                predicted_class=predicted_class,
-                confidence=confidence,
-                logits_shape=logits_shape,
-                logits_dtype=logits_dtype,
-            )
-            local_response_bytes_total += int(local_response_bytes)
-
             local_stage_metrics.append(
                 StageMetric(
                     worker_id=runtime.worker_id,
                     stage_id=current_partition_id,
                     model_instance_id=model_instance_id,
                     compute_time_sec=local_compute_time_sec,
-                    request_bytes=int(current_inbound_request_bytes),
-                    response_bytes=int(local_response_bytes),
                 )
             )
             local_path.append(runtime.worker_id)
@@ -114,11 +93,6 @@ def execute_or_forward(
                 compute_time_sec=local_compute_time_sec,
                 stage_metrics=local_stage_metrics,
                 path=local_path,
-                total_request_bytes=int(local_request_bytes_total),
-                total_response_bytes=int(local_response_bytes_total),
-                total_protocol_bytes=int(
-                    local_request_bytes_total + local_response_bytes_total
-                ),
                 total_remote_compute_time_sec=local_compute_time_total,
                 timestamp_completed_ns=time.time_ns(),
             )
@@ -170,24 +144,18 @@ def execute_or_forward(
                     stage_id=current_partition_id,
                     model_instance_id=model_instance_id,
                     compute_time_sec=local_compute_time_sec,
-                    request_bytes=int(current_inbound_request_bytes),
-                    response_bytes=0,
                 )
             )
             local_path.append(runtime.worker_id)
             current_metadata = next_metadata
             current_tensor = activation
-            current_inbound_request_bytes = 0
             continue
 
-        downstream_terminal, outbound_request_bytes, _ = infer_remote(
+        downstream_terminal = infer_remote(
             worker_cfg=next_worker_cfg,
             metadata=next_metadata,
             tensor_bytes=activation_bytes,
         )
-
-        response_bytes_from_this_stage = int(outbound_request_bytes)
-        local_response_bytes_total += response_bytes_from_this_stage
 
         local_stage_metrics.append(
             StageMetric(
@@ -195,8 +163,6 @@ def execute_or_forward(
                 stage_id=current_partition_id,
                 model_instance_id=model_instance_id,
                 compute_time_sec=local_compute_time_sec,
-                request_bytes=int(current_inbound_request_bytes),
-                response_bytes=response_bytes_from_this_stage,
             )
         )
         local_path.append(runtime.worker_id)
@@ -204,13 +170,6 @@ def execute_or_forward(
         stage_metrics = [*local_stage_metrics, *downstream_terminal.stage_metrics]
         path = [*local_path, *downstream_terminal.path]
 
-        total_request_bytes = int(local_request_bytes_total) + int(
-            downstream_terminal.total_request_bytes
-        )
-        total_response_bytes = int(local_response_bytes_total) + int(
-            downstream_terminal.total_response_bytes
-        )
-        total_protocol_bytes = total_request_bytes + total_response_bytes
         total_remote_compute_time_sec = local_compute_time_total + float(
             downstream_terminal.total_remote_compute_time_sec
         )
@@ -231,9 +190,6 @@ def execute_or_forward(
             compute_time_sec=downstream_terminal.compute_time_sec,
             stage_metrics=stage_metrics,
             path=path,
-            total_request_bytes=total_request_bytes,
-            total_response_bytes=total_response_bytes,
-            total_protocol_bytes=total_protocol_bytes,
             total_remote_compute_time_sec=total_remote_compute_time_sec,
             timestamp_completed_ns=downstream_terminal.timestamp_completed_ns,
         )
@@ -263,38 +219,3 @@ def _compute_prediction_summary(logits: torch.Tensor) -> tuple[int, float]:
     return predicted_class, confidence
 
 
-def _estimate_terminal_response_bytes(
-    *,
-    request_id: str,
-    sample_id: int,
-    trace_id: str,
-    worker_id: str,
-    stage_id: int,
-    exit_id: int,
-    predicted_class: int | None,
-    confidence: float | None,
-    logits_shape: list[int],
-    logits_dtype: str,
-) -> int:
-    """
-    Rough terminal JSON response estimate.
-
-    This is intentionally approximate, but stable and comparable across runs.
-    """
-    payload = {
-        "request_id": request_id,
-        "sample_id": sample_id,
-        "trace_id": trace_id,
-        "worker_id": worker_id,
-        "stage_id": stage_id,
-        "exit_id": exit_id,
-        "predicted_class": predicted_class,
-        "confidence": confidence,
-        "logits_shape": logits_shape,
-        "logits_dtype": logits_dtype,
-    }
-
-    body_estimate = len(str(payload).encode("utf-8"))
-    json_overhead = 512
-    http_overhead = 512
-    return body_estimate + json_overhead + http_overhead

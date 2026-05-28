@@ -1,0 +1,18 @@
+﻿experiment:
+  id: exp1_2_resnet18_cifar10
+  name: resnet18_ee_single_node_cifar10
+  description: Early-exit ResNet-18 inference on a single worker node on CIFAR-10.
+
+config_refs:
+  dataset: configs/datasets/cifar10.yaml
+  model: configs/models/resnet18_ee_entropy_cifar10.yaml
+  system: configs/systems/single_node_worker1.yaml
+
+runtime:
+  batch_size: 1
+  warmup_samples: 20
+  save_per_sample_metrics: true
+  save_predictions: false
+
+output:
+  dir: ./results/exp1_single_model/02_single_node_resnet18_ee_cifar10/run_001

@@ -1,0 +1,6 @@
+name: resnet18_baseline_cifar100
+type: baseline
+architecture: resnet18
+
+weights:
+  path: ./checkpoints/resnet18_baseline_cifar100.pth

@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_PATH="${1:-configs/experiments/exp1_3_ee_homogeneous_2nodes.yaml}"
+CONFIG_PATH="${1:-configs/experiments/exp1_3_resnet18_ee_3nodes_cifar10.yaml}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-WORKER1_HOST="192.168.0.102"
-WORKER1_PORT="9101"
-WORKER2_HOST="192.168.0.104"
-WORKER2_PORT="9102"
+export PYTHONPATH="$REPO_ROOT"
 
-echo "[run_exp1_3] checking worker1 health..."
-curl --fail --silent "http://${WORKER1_HOST}:${WORKER1_PORT}/health" >/dev/null
-echo "[run_exp1_3] worker1 is reachable"
+source "${REPO_ROOT}/scripts/run/distributed_common.sh"
 
-echo "[run_exp1_3] checking worker2 health..."
-curl --fail --silent "http://${WORKER2_HOST}:${WORKER2_PORT}/health" >/dev/null
-echo "[run_exp1_3] worker2 is reachable"
+echo "[healthcheck] config=$CONFIG_PATH"
+check_workers_for_config "[healthcheck]" "$CONFIG_PATH"

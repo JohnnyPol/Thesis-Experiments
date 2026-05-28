@@ -37,5 +37,3 @@ workers:
     device: cpu
     next_worker_id: null
 
-monitoring:
-  network_interface: eth0

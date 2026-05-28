@@ -1,0 +1,6 @@
+name: resnet34_baseline_cifar10
+type: baseline
+architecture: resnet34
+
+weights:
+  path: ./checkpoints/resnet34_baseline.pth

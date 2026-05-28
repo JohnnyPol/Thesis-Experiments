@@ -14,8 +14,6 @@ paths:
   results_root: ./results
 
 monitoring:
-  network_interface: eth0
   collect_latency: true
-  collect_network: true
   collect_energy: true
   collect_system_stats: false

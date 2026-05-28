@@ -1,6 +1,0 @@
-name: resnet18_baseline
-type: baseline
-architecture: resnet18
-
-weights:
-  path: ./checkpoints/resnet18_baseline.pth

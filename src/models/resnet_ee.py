@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.models.exit_blocks import ExitBlock, ExitBlock50
+from src.models.exit_blocks import ExitBlock
 
 class ResNetEE18(nn.Module):
     def __init__(self, block, layers, num_classes=10, confidence_threshold=0.9):
@@ -27,9 +27,10 @@ class ResNetEE18(nn.Module):
         self.exit0 = ExitBlock(64, num_classes, num_convs=3)
         self.exit1 = ExitBlock(128, num_classes, num_convs=2)
         self.exit2 = ExitBlock(256, num_classes, num_convs=1)
+        self.exit3 = ExitBlock(512, num_classes, num_convs=1)
 
 
-        self.early_exits = [self.exit0, self.exit1, self.exit2]
+        self.early_exits = [self.exit0, self.exit1, self.exit2, self.exit3]
         self.layers = [self.layer0, self.layer1, self.layer2, self.layer3]
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -99,14 +100,20 @@ class ResNetEE18(nn.Module):
         return entropy.item() <= self.confidence_threshold
 
 
-class ResNetEE50(nn.Module):
+class ResNetEE34(nn.Module):
     def __init__(self, block, layers, num_classes=10, confidence_threshold=0.9):
-        super(ResNetEE50, self).__init__()
+        super(ResNetEE34, self).__init__(
+            block,
+            layers,
+            num_classes=num_classes,
+            confidence_threshold=confidence_threshold,
+        )
+
         self.inplanes = 64
         self.confidence_threshold = confidence_threshold
 
         self.conv1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, stride=2, padding=3),
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
             nn.BatchNorm2d(64),
             nn.ReLU()
         )
@@ -118,24 +125,25 @@ class ResNetEE50(nn.Module):
         self.layer3 = self._make_layer(block, 512, layers[3], stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.fc = nn.Linear(512, num_classes)
 
-        self.exit0 = ExitBlock50(64 * block.expansion, num_classes, num_convs=3)
-        self.exit1 = ExitBlock50(128 * block.expansion, num_classes, num_convs=2)
-        self.exit2 = ExitBlock50(256 * block.expansion, num_classes, num_convs=1)
+        self.exit0 = ExitBlock(64, num_classes, num_convs=3)
+        self.exit1 = ExitBlock(128, num_classes, num_convs=2)
+        self.exit2 = ExitBlock(256, num_classes, num_convs=1)
 
-        self.early_exits = [self.exit0, self.exit1, self.exit2]
+
+        self.early_exits = [self.exit0, self.exit1, self.exit2, self.exit3]
         self.layers = [self.layer0, self.layer1, self.layer2, self.layer3]
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
+        if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
+                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride),
+                nn.BatchNorm2d(planes),
             )
         layers = [block(self.inplanes, planes, stride, downsample)]
-        self.inplanes = planes * block.expansion
+        self.inplanes = planes
         for _ in range(1, blocks):
             layers.append(block(self.inplanes, planes))
         return nn.Sequential(*layers)

@@ -88,34 +88,70 @@ def _compute_communication_overhead_fields(metrics_path: Path) -> dict[str, floa
     }
 
 
+def _base_experiment_id(experiment_id: str) -> str:
+    for suffix in ("_cifar10", "_cifar100"):
+        if experiment_id.endswith(suffix):
+            return experiment_id[: -len(suffix)]
+    return experiment_id
+
+
+def _dataset_label(row: dict[str, Any]) -> str | None:
+    dataset_name = str(row.get("dataset_name", "")).lower()
+    labels = {
+        "cifar10": "CIFAR-10",
+        "cifar100": "CIFAR-100",
+    }
+    return labels.get(dataset_name)
+
+
 def infer_topology_label(row: dict[str, Any]) -> str:
     experiment_id = str(row.get("experiment_id", ""))
+    base_experiment_id = _base_experiment_id(experiment_id)
     mapping = {
-        "exp1_1": "Single Node Baseline",
-        "exp1_2": "Single Node Early Exit",
-        "exp1_3": "Homogeneous 2 Workers",
-        "exp1_4": "Homogeneous 3 Workers",
-        "exp1_5": "Heterogeneous Pi + Jetson",
-        "exp1_6": "Heterogeneous 2 Pis + Jetson",
-        "exp2": "Homogeneous Multi-Model",
-        "exp3": "Memory-Aware Multi-Model",
+        "exp1_1": "Single Node ResNet-18 Baseline",
+        "exp1_1_resnet18": "Single Node ResNet-18 Baseline",
+        "exp1_1_resnet34": "Single Node ResNet-34 Baseline",
+        "exp1_2_resnet18": "Single Node ResNet-18 EE",
+        "exp1_2_resnet34": "Single Node ResNet-34 EE",
+        "exp1_3_resnet18": "Homogeneous 3 Workers ResNet-18 EE",
+        "exp1_3_resnet34": "Homogeneous 3 Workers ResNet-34 EE",
+        "exp2_resnet18": "Homogeneous Multi-Model ResNet-18",
+        "exp2_resnet34": "Homogeneous Multi-Model ResNet-34",
+        "exp3_1_resnet18": "Memory-Aware 3.1 ResNet-18",
+        "exp3_1_resnet34": "Memory-Aware 3.1 ResNet-34",
+        "exp3_2_resnet18": "Memory-Aware 3.2 ResNet-18",
+        "exp3_2_resnet34": "Memory-Aware 3.2 ResNet-34",
+        "exp3_3_resnet18": "Memory-Aware 3.3 ResNet-18",
+        "exp3_3_resnet34": "Memory-Aware 3.3 ResNet-34",
     }
-    return mapping.get(experiment_id, experiment_id or str(row.get("system_name", "Unknown")))
+    label = mapping.get(
+        base_experiment_id,
+        experiment_id or str(row.get("system_name", "Unknown")),
+    )
+    dataset_label = _dataset_label(row)
+    if dataset_label:
+        return f"{label} ({dataset_label})"
+    return label
 
 
 def infer_category(row: dict[str, Any]) -> str:
-    experiment_id = str(row.get("experiment_id", ""))
-    if experiment_id == "exp1_1":
+    experiment_id = _base_experiment_id(str(row.get("experiment_id", "")))
+    if experiment_id in {"exp1_1", "exp1_1_resnet18", "exp1_1_resnet34"}:
         return "baseline"
-    if experiment_id == "exp1_2":
+    if experiment_id in {"exp1_2_resnet18", "exp1_2_resnet34"}:
         return "single_node_ee"
-    if experiment_id in {"exp1_3", "exp1_4"}:
+    if experiment_id in {"exp1_3_resnet18", "exp1_3_resnet34"}:
         return "distributed_homogeneous"
-    if experiment_id in {"exp1_5", "exp1_6"}:
-        return "distributed_heterogeneous"
-    if experiment_id == "exp2":
+    if experiment_id in {"exp2_resnet18", "exp2_resnet34"}:
         return "distributed_multi_model"
-    if experiment_id == "exp3":
+    if experiment_id in {
+        "exp3_1_resnet18",
+        "exp3_1_resnet34",
+        "exp3_2_resnet18",
+        "exp3_2_resnet34",
+        "exp3_3_resnet18",
+        "exp3_3_resnet34",
+    }:
         return "distributed_memory_aware_multi_model"
     return "other"
 
@@ -170,7 +206,7 @@ def write_summary_bundle(df: pd.DataFrame, output_dir: Path) -> None:
     export_df.to_json(json_path, orient="records", indent=2)
 
     lines = [
-        "# Experiment 1 Overview",
+        "# Experiment Overview",
         "",
         "Combined metrics dataset generated from all available `metrics.json` files.",
         "",
@@ -190,7 +226,13 @@ def write_summary_bundle(df: pd.DataFrame, output_dir: Path) -> None:
         )
 
     best_throughput = df.loc[df["throughput_samples_per_sec"].idxmax()]
-    lowest_energy = df.loc[df["energy_kWh"].fillna(df.get("system_energy_kWh_total")).idxmin()] if "energy_kWh" in df.columns else None
+    lowest_energy = None
+    if "energy_kWh" in df.columns:
+        energy_series = df["energy_kWh"]
+        if "system_energy_kWh_total" in df.columns:
+            energy_series = energy_series.fillna(df["system_energy_kWh_total"])
+        if energy_series.notna().any():
+            lowest_energy = df.loc[energy_series.idxmin()]
 
     lines.extend(
         [

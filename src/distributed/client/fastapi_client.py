@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import requests
@@ -29,12 +28,9 @@ def infer_remote(
     metadata: InferenceRequestMetadata,
     tensor_bytes: bytes,
     timeout_sec: float = DEFAULT_TIMEOUT_SEC,
-) -> tuple[TerminalInferenceResponse, int, int]:
+) -> TerminalInferenceResponse:
     """
     Send an inference request to a worker FastAPI endpoint.
-
-    Returns:
-        (terminal_response, estimated_request_bytes, estimated_response_bytes)
     """
     url = f"{_worker_base_url(worker_cfg)}/infer"
 
@@ -45,13 +41,6 @@ def infer_remote(
     }
 
     response = requests.post(url, files=files, timeout=timeout_sec)
-
-    estimated_request_bytes = _estimate_request_bytes(
-        url=url,
-        metadata_json=metadata_json,
-        tensor_bytes=tensor_bytes,
-    )
-    estimated_response_bytes = _estimate_response_bytes(response)
 
     response.raise_for_status()
     payload = response.json()
@@ -64,7 +53,7 @@ def infer_remote(
         )
 
     terminal = TerminalInferenceResponse.model_validate(payload)
-    return terminal, estimated_request_bytes, estimated_response_bytes
+    return terminal
 
 
 def get_health(
@@ -107,35 +96,3 @@ def stop_monitoring(
     return response.json()
 
 
-def _estimate_request_bytes(
-    url: str,
-    metadata_json: str,
-    tensor_bytes: bytes,
-) -> int:
-    """
-    Rough request size estimate for metrics purposes.
-
-    This is not exact wire-level TCP accounting, but it is stable enough for
-    research-side protocol byte comparisons.
-    """
-    url_bytes = len(url.encode("utf-8"))
-    metadata_bytes = len(metadata_json.encode("utf-8"))
-    tensor_nbytes = len(tensor_bytes)
-
-    multipart_overhead = 512
-    http_header_overhead = 512
-
-    return url_bytes + metadata_bytes + tensor_nbytes + multipart_overhead + http_header_overhead
-
-
-def _estimate_response_bytes(response: requests.Response) -> int:
-    """
-    Rough response size estimate based on response body + header approximation.
-    """
-    body_bytes = len(response.content)
-    header_bytes = sum(
-        len(str(key).encode("utf-8")) + len(str(value).encode("utf-8"))
-        for key, value in response.headers.items()
-    )
-    http_status_line_overhead = 64
-    return body_bytes + header_bytes + http_status_line_overhead

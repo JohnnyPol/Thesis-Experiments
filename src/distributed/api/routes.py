@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
 from src.distributed.api.schemas import (
@@ -40,6 +39,7 @@ def create_router(runtime: WorkerRuntime) -> APIRouter:
             next_worker_id=runtime.next_worker_id,
             model_instance_ids=runtime.model_instance_ids,
             model_name=runtime.model_name,
+            dataset_name=runtime.dataset_name,
             exit_policy=runtime.exit_policy,
         )
 
@@ -69,7 +69,6 @@ def create_router(runtime: WorkerRuntime) -> APIRouter:
         responses={500: {"model": ErrorResponse}},
     )
     async def infer(
-        request: Request,
         metadata: str = Form(..., alias=METADATA_FORM_FIELD),
         tensor_file: UploadFile = File(..., alias=TENSOR_FORM_FIELD),
     ) -> TerminalInferenceResponse | JSONResponse:
@@ -86,17 +85,10 @@ def create_router(runtime: WorkerRuntime) -> APIRouter:
                 device="cpu",
             )
 
-            inbound_request_bytes = _estimate_inbound_request_bytes(
-                request=request,
-                metadata_str=metadata,
-                tensor_nbytes=len(raw_payload),
-            )
-
             terminal = execute_or_forward(
                 runtime=runtime,
                 metadata=meta,
                 tensor=tensor,
-                inbound_request_bytes=inbound_request_bytes,
             )
             return terminal
 
@@ -114,24 +106,6 @@ def create_router(runtime: WorkerRuntime) -> APIRouter:
             return JSONResponse(status_code=500, content=error.model_dump())
 
     return router
-
-
-def _estimate_inbound_request_bytes(
-    *,
-    request: Request,
-    metadata_str: str,
-    tensor_nbytes: int,
-) -> int:
-    header_bytes = sum(
-        len(str(key).encode("utf-8")) + len(str(value).encode("utf-8"))
-        for key, value in request.headers.items()
-    )
-
-    metadata_bytes = len(metadata_str.encode("utf-8"))
-    multipart_overhead = 512
-    http_overhead = 256
-
-    return header_bytes + metadata_bytes + tensor_nbytes + multipart_overhead + http_overhead
 
 
 def _safe_request_id(metadata_str: str) -> str:

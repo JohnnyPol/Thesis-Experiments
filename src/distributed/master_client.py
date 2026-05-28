@@ -24,7 +24,6 @@ from src.metrics.latency import (
     compute_throughput,
     compute_total_inference_time,
 )
-from src.metrics.network import compute_network_delta, read_network_bytes
 from src.metrics.utilization import compute_node_utilization
 from src.utils.config import load_experiment_bundle, resolve_path
 
@@ -133,9 +132,9 @@ def evaluate_distributed_ee(
     worker_cfgs = _get_ordered_worker_cfgs(system_cfg)
     num_stages = len(worker_cfgs)
 
-    if num_stages not in {2, 3}:
+    if num_stages != 3:
         raise ValueError(
-            f"Unsupported number of workers/stages: {num_stages}. Expected 2 or 3."
+            f"Unsupported number of workers/stages: {num_stages}. Expected 3."
         )
 
     entry_worker_cfg = worker_cfgs[0]
@@ -184,25 +183,17 @@ def evaluate_distributed_ee(
             dataset_config=dataset_cfg,
         )
 
-    master_monitor_cfg = system_cfg.get("monitoring", {})
-    network_interface = master_monitor_cfg.get("network_interface", None)
-
     correct = 0
     total = 0
     latencies: list[float] = []
     per_sample_rows: list[dict[str, Any]] = []
     exit_counts = initialize_exit_counts(4)
 
-    protocol_bytes_total = 0
     remote_compute_total = 0.0
     communication_overheads: list[float] = []
     communication_overhead_ratios: list[float] = []
 
     worker_compute_totals = _make_stage_metric_maps(worker_cfgs, 0.0)
-    stage_request_totals = _make_stage_metric_maps(worker_cfgs, 0)
-    stage_response_totals = _make_stage_metric_maps(worker_cfgs, 0)
-
-    net_before = read_network_bytes(interface=network_interface)
 
     tracker = EmissionsTracker(
         measure_power_secs=1,
@@ -247,26 +238,17 @@ def evaluate_distributed_ee(
                     communication_overhead_sec / latency if latency > 0.0 else 0.0
                 )
 
-                protocol_bytes_total += int(distributed_output["protocol_bytes"])
                 remote_compute_total += remote_compute_time_sec
                 communication_overheads.append(communication_overhead_sec)
                 communication_overhead_ratios.append(communication_overhead_ratio)
 
                 worker_compute_times = distributed_output["worker_compute_times"]
-                stage_request_bytes = distributed_output["stage_request_bytes"]
-                stage_response_bytes = distributed_output["stage_response_bytes"]
 
                 for worker_cfg in worker_cfgs:
                     worker_id = str(worker_cfg["worker_id"])
                     worker_compute_totals[worker_id] = float(
                         worker_compute_totals[worker_id]
                     ) + float(worker_compute_times.get(worker_id, 0.0))
-                    stage_request_totals[worker_id] = int(
-                        stage_request_totals[worker_id]
-                    ) + int(stage_request_bytes.get(worker_id, 0))
-                    stage_response_totals[worker_id] = int(
-                        stage_response_totals[worker_id]
-                    ) + int(stage_response_bytes.get(worker_id, 0))
 
                 update_exit_counts(exit_counts, exit_id)
 
@@ -284,7 +266,6 @@ def evaluate_distributed_ee(
                     "correct": is_correct,
                     "exit_id": exit_id,
                     "confidence": distributed_output.get("confidence"),
-                    "protocol_bytes": int(distributed_output["protocol_bytes"]),
                     "remote_compute_time_sec": remote_compute_time_sec,
                     "communication_overhead_sec": communication_overhead_sec,
                     "communication_overhead_ratio": communication_overhead_ratio,
@@ -295,12 +276,6 @@ def evaluate_distributed_ee(
                     worker_id = str(worker_cfg["worker_id"])
                     row[f"{worker_id}_compute_time_sec"] = float(
                         worker_compute_times.get(worker_id, 0.0)
-                    )
-                    row[f"{worker_id}_request_bytes"] = int(
-                        stage_request_bytes.get(worker_id, 0)
-                    )
-                    row[f"{worker_id}_response_bytes"] = int(
-                        stage_response_bytes.get(worker_id, 0)
                     )
 
                 per_sample_rows.append(row)
@@ -331,8 +306,6 @@ def evaluate_distributed_ee(
             timeout_sec=timeout_sec,
         )
 
-    net_after = read_network_bytes(interface=network_interface)
-
     total_inference_time_sec = compute_total_inference_time(
         experiment_start, experiment_end
     )
@@ -344,7 +317,6 @@ def evaluate_distributed_ee(
         total_inference_time_sec,
     )
     accuracy = compute_accuracy(correct, total)
-    network_stats = compute_network_delta(net_before, net_after)
 
     emissions_data = tracker._prepare_emissions_data()
     carbon_kg = emissions_data.emissions
@@ -360,13 +332,6 @@ def evaluate_distributed_ee(
         "master_node_utilization": float(node_utilization),
         "master_carbon_kg": float(carbon_kg) if carbon_kg is not None else None,
         "master_energy_kWh": float(energy_kwh) if energy_kwh is not None else None,
-        "master_network_rx_bytes": int(network_stats["rx_bytes"]),
-        "master_network_tx_bytes": int(network_stats["tx_bytes"]),
-        "master_network_total_bytes": int(network_stats["total_bytes"]),
-        "protocol_bytes_total": int(protocol_bytes_total),
-        "avg_protocol_bytes_per_sample": (
-            float(protocol_bytes_total / total) if total > 0 else 0.0
-        ),
         "remote_compute_time_total_sec": float(remote_compute_total),
         "remote_compute_time_avg_sec": (
             float(remote_compute_total / total) if total > 0 else 0.0
@@ -413,8 +378,6 @@ def evaluate_distributed_ee(
     for worker_cfg in worker_cfgs:
         worker_id = str(worker_cfg["worker_id"])
         compute_total = float(worker_compute_totals[worker_id])
-        req_total = int(stage_request_totals[worker_id])
-        resp_total = int(stage_response_totals[worker_id])
         worker_node_utilization = compute_node_utilization(
             compute_total,
             total_inference_time_sec,
@@ -428,8 +391,6 @@ def evaluate_distributed_ee(
             float(compute_total / total) if total > 0 else 0.0
         )
         results[f"{worker_id}_node_utilization"] = float(worker_node_utilization)
-        results[f"{worker_id}_request_bytes_total"] = req_total
-        results[f"{worker_id}_response_bytes_total"] = resp_total
         results[f"{worker_id}_carbon_kg"] = worker_carbon_kg
         results[f"{worker_id}_energy_kWh"] = worker_energy_kwh
 

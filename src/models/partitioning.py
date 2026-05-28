@@ -9,8 +9,37 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from src.models.blocks import ResidualBlock
-from src.models.resnet_ee import ResNetEE18
+from src.models.resnet_ee import ResNetEE18, ResNetEE34
 from src.utils.config import resolve_path
+
+
+FullEarlyExitResNet = ResNetEE18 | ResNetEE34
+
+
+EE_MODEL_BUILDERS = {
+    "resnet18": lambda block, num_classes, confidence_threshold: ResNetEE18(
+        block,
+        [2, 2, 2, 2],
+        num_classes=num_classes,
+        confidence_threshold=confidence_threshold,
+    ),
+    "resnet34": lambda block, num_classes, confidence_threshold: ResNetEE34(
+        block,
+        [3, 4, 6, 3],
+        num_classes=num_classes,
+        confidence_threshold=confidence_threshold,
+    ),
+}
+
+
+def extract_architecture(model_cfg: dict[str, Any]) -> str:
+    architecture = str(model_cfg.get("architecture", "resnet18")).lower()
+    if architecture not in EE_MODEL_BUILDERS:
+        raise ValueError(
+            f"Unsupported ResNet architecture '{architecture}'. "
+            f"Expected one of: {', '.join(sorted(EE_MODEL_BUILDERS))}."
+        )
+    return architecture
 
 
 def _entropy_confident(logits: torch.Tensor, threshold: float) -> bool:
@@ -33,16 +62,15 @@ class PartitionOutput:
     compute_time_sec: float
 
 
-class ResNetEE2WayPartition0(nn.Module):
+class ResNetEE3WayPartition0(nn.Module):
     """
-    2-worker topology, stage 0:
-      conv1 -> maxpool -> layer0 -> exit0
-                        -> layer1 -> exit1
+    Stage 0:
+      conv1 -> maxpool -> layer0 -> exit0 -> layer1 -> exit1
 
     If neither exit fires, forward activation after layer1.
     """
 
-    def __init__(self, full_model: ResNetEE18):
+    def __init__(self, full_model: FullEarlyExitResNet):
         super().__init__()
         self.conv1 = full_model.conv1
         self.maxpool = full_model.maxpool
@@ -89,20 +117,18 @@ class ResNetEE2WayPartition0(nn.Module):
         )
 
 
-class ResNetEE2WayPartition1(nn.Module):
+class ResNetEE3WayPartition1(nn.Module):
     """
-    2-worker topology, stage 1:
+    Stage 1:
       input activation(after layer1) -> layer2 -> exit2
-                                     -> layer3 -> avgpool -> fc(final)
+
+    If exit2 does not fire, forward activation after layer2.
     """
 
-    def __init__(self, full_model: ResNetEE18):
+    def __init__(self, full_model: FullEarlyExitResNet):
         super().__init__()
         self.layer2 = full_model.layer2
-        self.layer3 = full_model.layer3
         self.exit2 = full_model.exit2
-        self.avgpool = full_model.avgpool
-        self.fc = full_model.fc
         self.confidence_threshold = float(full_model.confidence_threshold)
 
     def forward(self, x: torch.Tensor) -> PartitionOutput:
@@ -119,134 +145,40 @@ class ResNetEE2WayPartition1(nn.Module):
                 compute_time_sec=time.time() - start,
             )
 
-        x3 = self.layer3(x2)
-        xf = self.avgpool(x3)
-        xf = torch.flatten(xf, 1)
-        out_final = self.fc(xf)
-
-        return PartitionOutput(
-            status="completed",
-            exit_id=3,
-            logits=out_final,
-            activation=None,
-            compute_time_sec=time.time() - start,
-        )
-
-
-class ResNetEE3WayPartition0(nn.Module):
-    """
-    3-worker topology, stage 0:
-      conv1 -> maxpool -> layer0 -> exit0
-
-    If exit0 does not fire, forward activation after layer0.
-    """
-
-    def __init__(self, full_model: ResNetEE18):
-        super().__init__()
-        self.conv1 = full_model.conv1
-        self.maxpool = full_model.maxpool
-        self.layer0 = full_model.layer0
-        self.exit0 = full_model.exit0
-        self.confidence_threshold = float(full_model.confidence_threshold)
-
-    def forward(self, x: torch.Tensor) -> PartitionOutput:
-        start = time.time()
-
-        x = self.conv1(x)
-        x = self.maxpool(x)
-        x0 = self.layer0(x)
-
-        out0 = self.exit0(x0)
-        if _entropy_confident(out0, self.confidence_threshold):
-            return PartitionOutput(
-                status="exited",
-                exit_id=0,
-                logits=out0,
-                activation=None,
-                compute_time_sec=time.time() - start,
-            )
-
         return PartitionOutput(
             status="forward",
             exit_id=None,
             logits=None,
-            activation=x0,
-            compute_time_sec=time.time() - start,
-        )
-
-
-class ResNetEE3WayPartition1(nn.Module):
-    """
-    3-worker topology, stage 1:
-      input activation(after layer0) -> layer1 -> exit1
-
-    If exit1 does not fire, forward activation after layer1.
-    """
-
-    def __init__(self, full_model: ResNetEE18):
-        super().__init__()
-        self.layer1 = full_model.layer1
-        self.exit1 = full_model.exit1
-        self.confidence_threshold = float(full_model.confidence_threshold)
-
-    def forward(self, x: torch.Tensor) -> PartitionOutput:
-        start = time.time()
-
-        x1 = self.layer1(x)
-        out1 = self.exit1(x1)
-
-        if _entropy_confident(out1, self.confidence_threshold):
-            return PartitionOutput(
-                status="exited",
-                exit_id=1,
-                logits=out1,
-                activation=None,
-                compute_time_sec=time.time() - start,
-            )
-
-        return PartitionOutput(
-            status="forward",
-            exit_id=None,
-            logits=None,
-            activation=x1,
+            activation=x2,
             compute_time_sec=time.time() - start,
         )
 
 
 class ResNetEE3WayPartition2(nn.Module):
     """
-    3-worker topology, stage 2:
-      input activation(after layer1) -> layer2 -> exit2
-                                     -> layer3 -> avgpool -> fc(final)
+    Stage 2:
+      input activation(after layer2) -> layer3 -> final classifier
     """
 
-    def __init__(self, full_model: ResNetEE18):
+    def __init__(self, full_model: FullEarlyExitResNet):
         super().__init__()
-        self.layer2 = full_model.layer2
         self.layer3 = full_model.layer3
-        self.exit2 = full_model.exit2
-        self.avgpool = full_model.avgpool
-        self.fc = full_model.fc
-        self.confidence_threshold = float(full_model.confidence_threshold)
+        self.exit3 = getattr(full_model, "exit3", None)
+        self.avgpool = full_model.avgpool if self.exit3 is None else None
+        self.fc = full_model.fc if self.exit3 is None else None
 
     def forward(self, x: torch.Tensor) -> PartitionOutput:
         start = time.time()
 
-        x2 = self.layer2(x)
-        out2 = self.exit2(x2)
-        if _entropy_confident(out2, self.confidence_threshold):
-            return PartitionOutput(
-                status="exited",
-                exit_id=2,
-                logits=out2,
-                activation=None,
-                compute_time_sec=time.time() - start,
-            )
-
-        x3 = self.layer3(x2)
-        xf = self.avgpool(x3)
-        xf = torch.flatten(xf, 1)
-        out_final = self.fc(xf)
+        x3 = self.layer3(x)
+        if self.exit3 is not None:
+            out_final = self.exit3(x3)
+        else:
+            if self.avgpool is None or self.fc is None:
+                raise RuntimeError("Missing final classifier for partition 2")
+            xf = self.avgpool(x3)
+            xf = torch.flatten(xf, 1)
+            out_final = self.fc(xf)
 
         return PartitionOutput(
             status="completed",
@@ -275,25 +207,25 @@ def extract_entropy_threshold(model_cfg: dict[str, Any]) -> float:
     return 0.9
 
 
-def build_full_ee_resnet18(
+def build_full_ee_resnet(
     model_cfg: dict[str, Any],
     dataset_cfg: dict[str, Any],
     repo_root: str,
     device: torch.device | str,
-) -> ResNetEE18:
+) -> FullEarlyExitResNet:
     """
-    Build the full EE-ResNet18 and load weights.
+    Build the full EE-ResNet and load weights.
     Workers then slice the full model into their local partition module.
     """
     device = torch.device(device)
     num_classes = extract_num_classes(dataset_cfg, model_cfg)
     confidence_threshold = extract_entropy_threshold(model_cfg)
+    architecture = extract_architecture(model_cfg)
 
-    model = ResNetEE18(
+    model = EE_MODEL_BUILDERS[architecture](
         ResidualBlock,
-        [2, 2, 2, 2],
-        num_classes=num_classes,
-        confidence_threshold=confidence_threshold,
+        num_classes,
+        confidence_threshold,
     ).to(device)
 
     weights_path = None
@@ -309,6 +241,20 @@ def build_full_ee_resnet18(
     return model
 
 
+def build_full_ee_resnet18(
+    model_cfg: dict[str, Any],
+    dataset_cfg: dict[str, Any],
+    repo_root: str,
+    device: torch.device | str,
+) -> FullEarlyExitResNet:
+    return build_full_ee_resnet(
+        model_cfg=model_cfg,
+        dataset_cfg=dataset_cfg,
+        repo_root=repo_root,
+        device=device,
+    )
+
+
 def build_partition_module(
     partition_id: int,
     num_partitions: int,
@@ -318,33 +264,23 @@ def build_partition_module(
     device: torch.device | str,
 ) -> nn.Module:
     """
-    Construct the local partition module for a worker.
-
-    Supported topologies:
-      - 2 workers
-      - 3 workers
+    Construct the local partition module for a 3-worker topology.
     """
-    full_model = build_full_ee_resnet18(
+    if num_partitions != 3:
+        raise ValueError(f"Unsupported num_partitions={num_partitions}. Expected 3.")
+
+    full_model = build_full_ee_resnet(
         model_cfg=model_cfg,
         dataset_cfg=dataset_cfg,
         repo_root=repo_root,
         device=device,
     )
 
-    if num_partitions == 2:
-        if partition_id == 0:
-            return ResNetEE2WayPartition0(full_model).to(device).eval()
-        if partition_id == 1:
-            return ResNetEE2WayPartition1(full_model).to(device).eval()
-        raise ValueError(f"Unsupported partition_id={partition_id} for 2-worker topology.")
+    if partition_id == 0:
+        return ResNetEE3WayPartition0(full_model).to(device).eval()
+    if partition_id == 1:
+        return ResNetEE3WayPartition1(full_model).to(device).eval()
+    if partition_id == 2:
+        return ResNetEE3WayPartition2(full_model).to(device).eval()
 
-    if num_partitions == 3:
-        if partition_id == 0:
-            return ResNetEE3WayPartition0(full_model).to(device).eval()
-        if partition_id == 1:
-            return ResNetEE3WayPartition1(full_model).to(device).eval()
-        if partition_id == 2:
-            return ResNetEE3WayPartition2(full_model).to(device).eval()
-        raise ValueError(f"Unsupported partition_id={partition_id} for 3-worker topology.")
-
-    raise ValueError(f"Unsupported num_partitions={num_partitions}. Expected 2 or 3.")
+    raise ValueError(f"Unsupported partition_id={partition_id} for 3-worker topology.")

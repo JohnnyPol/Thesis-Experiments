@@ -6,14 +6,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.distributed.protocol.constants import (
     PROTOCOL_VERSION,
-    REQUEST_KIND_ACTIVATION,
-    REQUEST_KIND_INPUT,
-    RESPONSE_STATUS_COMPLETED,
-    RESPONSE_STATUS_ERROR,
-    RESPONSE_STATUS_EXITED,
     TENSOR_LAYOUT_NCHW,
     VALID_REQUEST_KINDS,
-    VALID_RESPONSE_STATUSES,
     VALID_TENSOR_LAYOUTS,
 )
 
@@ -23,8 +17,6 @@ class StageMetric(BaseModel):
     stage_id: int = Field(..., ge=0, description="Logical stage/partition index")
     model_instance_id: str = Field(default="model_0")
     compute_time_sec: float = Field(..., ge=0.0)
-    request_bytes: int = Field(..., ge=0)
-    response_bytes: int = Field(..., ge=0)
 
 
 class InferenceRequestMetadata(BaseModel):
@@ -53,6 +45,7 @@ class InferenceRequestMetadata(BaseModel):
     tensor_layout: str = Field(default=TENSOR_LAYOUT_NCHW)
 
     model_name: str | None = None
+    dataset_name: str | None = None
     exit_policy: str | None = None
 
     timestamp_sent_ns: int | None = Field(default=None, ge=0)
@@ -114,9 +107,6 @@ class TerminalInferenceResponse(BaseModel):
     stage_metrics: list[StageMetric] = Field(default_factory=list)
     path: list[str] = Field(default_factory=list)
 
-    total_request_bytes: int = Field(default=0, ge=0)
-    total_response_bytes: int = Field(default=0, ge=0)
-    total_protocol_bytes: int = Field(default=0, ge=0)
     total_remote_compute_time_sec: float = Field(default=0.0, ge=0.0)
 
     timestamp_completed_ns: int | None = Field(default=None, ge=0)
@@ -130,13 +120,6 @@ class TerminalInferenceResponse(BaseModel):
 
     @model_validator(mode="after")
     def validate_totals(self) -> "TerminalInferenceResponse":
-        if self.total_protocol_bytes != (
-            self.total_request_bytes + self.total_response_bytes
-        ):
-            raise ValueError(
-                "total_protocol_bytes must equal total_request_bytes + total_response_bytes"
-            )
-
         stage_compute_sum = sum(metric.compute_time_sec for metric in self.stage_metrics)
         if self.total_remote_compute_time_sec + 1e-12 < stage_compute_sum:
             raise ValueError(
@@ -177,6 +160,7 @@ class WorkerInfoResponse(BaseModel):
     model_instance_ids: list[str] = Field(default_factory=list)
 
     model_name: str | None = None
+    dataset_name: str | None = None
     exit_policy: str | None = None
 
 

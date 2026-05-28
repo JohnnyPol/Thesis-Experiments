@@ -1,0 +1,58 @@
+﻿experiment:
+  id: exp3_2_resnet34_cifar10
+  name: resnet34_memory_aware_multi_model_staggered_late_placement_cifar10
+  description: Two early-exit ResNet-34 model instances with first partitions split while one second-stage partition is moved off the consolidated late worker on CIFAR-10.
+
+config_refs:
+  dataset: configs/datasets/cifar10.yaml
+  model: configs/models/resnet34_ee_entropy_cifar10.yaml
+  system: configs/systems/homogeneous_3workers.yaml
+
+runtime:
+  batch_size: 1
+  warmup_samples: 20
+  model_instance_count: 2
+  concurrency: 2
+  max_samples_per_model: null
+  save_per_sample_metrics: true
+  save_predictions: false
+  placement_strategy: staggered_late_partition_split
+
+placement:
+  rationale: Keep first partitions split, but move model_0 stage_1 to worker2 to compare against full late-stage consolidation.
+  assignments:
+    worker1:
+      - model_instance_id: model_0
+        partition_id: 0
+    worker2:
+      - model_instance_id: model_1
+        partition_id: 0
+      - model_instance_id: model_0
+        partition_id: 1
+    worker3:
+      - model_instance_id: model_0
+        partition_id: 2
+      - model_instance_id: model_1
+        partition_id: 1
+      - model_instance_id: model_1
+        partition_id: 2
+  routes:
+    model_0:
+      - worker_id: worker1
+        partition_id: 0
+      - worker_id: worker2
+        partition_id: 1
+      - worker_id: worker3
+        partition_id: 2
+    model_1:
+      - worker_id: worker2
+        partition_id: 0
+      - worker_id: worker3
+        partition_id: 1
+      - worker_id: worker3
+        partition_id: 2
+  constraints:
+    max_first_partitions_per_worker: 1
+
+output:
+  dir: ./results/exp3_memory_aware_multi_model/02_resnet34_3workers_2models_staggered_late_cifar10/run_001

@@ -6,7 +6,15 @@ cd "$PROJECT_ROOT"
 
 export PYTHONPATH="$PROJECT_ROOT"
 
-CONFIG_PATH="${PROJECT_ROOT}/configs/experiments/exp1_1_baseline_single_node.yaml"
+CONFIG_PATHS=(
+  "${PROJECT_ROOT}/configs/experiments/exp1_1_resnet18_baseline_single_node_cifar10.yaml"
+  "${PROJECT_ROOT}/configs/experiments/exp1_1_resnet18_baseline_single_node_cifar100.yaml"
+  "${PROJECT_ROOT}/configs/experiments/exp1_1_resnet34_baseline_single_node_cifar10.yaml"
+  "${PROJECT_ROOT}/configs/experiments/exp1_1_resnet34_baseline_single_node_cifar100.yaml"
+)
 
-python -m src.inference.single_node \
-  --config "$CONFIG_PATH"
+for CONFIG_PATH in "${CONFIG_PATHS[@]}"; do
+  echo "[run_exp1_1] config=$CONFIG_PATH"
+  python -m src.inference.single_node \
+    --config "$CONFIG_PATH"
+done

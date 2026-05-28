@@ -27,6 +27,9 @@ def parse_args() -> argparse.Namespace:
 def _prepare_plot_dir(output_dir: Path) -> Path:
     plot_dir = output_dir / "plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
+    legacy_network_plot = plot_dir / "distributed_network_protocol.png"
+    if legacy_network_plot.exists():
+        legacy_network_plot.unlink()
     return plot_dir
 
 
@@ -63,10 +66,22 @@ def plot_energy_emissions(df: pd.DataFrame, plot_dir: Path) -> None:
     labels = df["topology_label"].tolist()
     x = np.arange(len(labels))
 
-    energy_series = df["system_energy_kWh_total"] if "system_energy_kWh_total" in df.columns else df["energy_kWh"]
-    carbon_series = df["system_carbon_kg_total"] if "system_carbon_kg_total" in df.columns else df["carbon_kg"]
-    energy_series = energy_series.fillna(df.get("energy_kWh"))
-    carbon_series = carbon_series.fillna(df.get("carbon_kg"))
+    energy_series = (
+        df["system_energy_kWh_total"]
+        if "system_energy_kWh_total" in df.columns
+        else df.get("energy_kWh", pd.Series([0.0] * len(df), index=df.index))
+    )
+    carbon_series = (
+        df["system_carbon_kg_total"]
+        if "system_carbon_kg_total" in df.columns
+        else df.get("carbon_kg", pd.Series([0.0] * len(df), index=df.index))
+    )
+    if "energy_kWh" in df.columns:
+        energy_series = energy_series.fillna(df["energy_kWh"])
+    if "carbon_kg" in df.columns:
+        carbon_series = carbon_series.fillna(df["carbon_kg"])
+    energy_series = energy_series.fillna(0.0)
+    carbon_series = carbon_series.fillna(0.0)
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     axes[0].bar(x, energy_series, color="#54A24B")
@@ -80,38 +95,6 @@ def plot_energy_emissions(df: pd.DataFrame, plot_dir: Path) -> None:
     axes[1].set_xticks(x, labels, rotation=25, ha="right")
 
     _save(fig, plot_dir / "energy_emissions.png")
-
-
-def plot_network_protocol(df: pd.DataFrame, plot_dir: Path) -> None:
-    distributed_df = df[df["mode"].astype(str).str.startswith("distributed")].copy()
-    if distributed_df.empty:
-        return
-
-    labels = distributed_df["topology_label"].tolist()
-    x = np.arange(len(labels))
-    width = 0.35
-
-    fig, ax = plt.subplots(figsize=(11, 5))
-    ax.bar(
-        x - width / 2,
-        distributed_df["protocol_bytes_total"] / 1e9,
-        width=width,
-        label="Protocol GB",
-        color="#4C78A8",
-    )
-    ax.bar(
-        x + width / 2,
-        distributed_df["master_network_total_bytes"] / 1e9,
-        width=width,
-        label="Master Network GB",
-        color="#B279A2",
-    )
-    ax.set_title("Distributed Network And Protocol Bytes")
-    ax.set_ylabel("GB")
-    ax.set_xticks(x, labels, rotation=25, ha="right")
-    ax.legend()
-
-    _save(fig, plot_dir / "distributed_network_protocol.png")
 
 
 def plot_communication_overhead(df: pd.DataFrame, plot_dir: Path) -> None:
@@ -147,7 +130,7 @@ def plot_communication_overhead(df: pd.DataFrame, plot_dir: Path) -> None:
 
 
 def plot_exit_distribution(df: pd.DataFrame, plot_dir: Path) -> None:
-    ee_df = df[df["experiment_id"] != "exp1_1"].copy()
+    ee_df = df[df["category"] != "baseline"].copy()
     if ee_df.empty:
         return
 
@@ -210,7 +193,6 @@ def main() -> None:
 
     plot_performance_overview(df, plot_dir)
     plot_energy_emissions(df, plot_dir)
-    plot_network_protocol(df, plot_dir)
     plot_communication_overhead(df, plot_dir)
     plot_exit_distribution(df, plot_dir)
     plot_worker_compute_breakdown(df, plot_dir)
