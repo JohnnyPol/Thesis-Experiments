@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 import torch
 from codecarbon import EmissionsTracker
+from tqdm import tqdm
 
 from src.data.loaders import data_loader
 from src.metrics.accuracy import compute_accuracy, update_correct_total
@@ -25,6 +26,7 @@ from src.metrics.utilization import compute_node_utilization
 from src.models.blocks import ResidualBlock
 from src.models.resnet_baseline import ResNet18, ResNet34
 from src.models.resnet_ee import ResNetEE18, ResNetEE34
+from src.models.weights import load_state_dict_file
 from src.utils.config import load_experiment_bundle, resolve_path
 
 
@@ -139,7 +141,7 @@ def build_model_from_config(
         ).to(device)
 
     if weights_path:
-        state_dict = torch.load(weights_path, map_location=device)
+        state_dict = load_state_dict_file(weights_path, map_location=device)
         model.load_state_dict(state_dict)
 
     return model, model_name
@@ -154,7 +156,7 @@ def evaluate_single_node(
     batch_size: int = 1,
     device: torch.device | str = "cpu",
     warmup_samples: int = 0,
-    max_samples: int | None = 1,  # infer only 1 sample for now
+    max_samples: int | None = None,
     show_progress: bool = True,
 ) -> tuple[dict, pd.DataFrame]:
     """
@@ -217,6 +219,7 @@ def evaluate_single_node(
     tracker = EmissionsTracker(
         measure_power_secs=1,
         log_level="critical",
+        allow_multiple_runs=False,
     )
     tracker.start()
     inferred_samples = 0
@@ -224,6 +227,12 @@ def evaluate_single_node(
 
     with torch.no_grad():
         sample_index = 0
+        progress = tqdm(
+            total=target_total,
+            desc=f"Inferencing {model_name}",
+            unit="sample",
+            disable=not show_progress,
+        )
         for images, labels in test_loader:
             if max_samples is not None and inferred_samples >= max_samples:
                 break
@@ -262,20 +271,11 @@ def evaluate_single_node(
             per_sample_rows.append(row)
             sample_index += 1
 
-            inferred_samples += 1
+            batch_samples = int(labels.size(0))
+            inferred_samples += batch_samples
+            progress.update(batch_samples)
 
-            if show_progress:
-                if target_total is not None:
-                    print(
-                        f"\rInferred {inferred_samples}/{target_total} samples",
-                        end="",
-                        flush=True,
-                    )
-                else:
-                    print(f"\rInferred {inferred_samples} samples", end="", flush=True)
-
-        if show_progress:
-            print()
+        progress.close()
 
     experiment_end = time.time()
     tracker.stop()
@@ -384,6 +384,8 @@ def main():
         dataset_cfg.get("loader", {}).get("batch_size", 1),
     )
     warmup_samples = experiment_cfg.get("runtime", {}).get("warmup_samples", 0)
+    max_samples = experiment_cfg.get("runtime", {}).get("max_samples")
+    max_samples = int(max_samples) if max_samples is not None else None
     device = system_cfg.get("runtime", {}).get("device", "cpu")
 
     is_ee = is_early_exit_model(model_cfg)
@@ -404,7 +406,7 @@ def main():
         batch_size=batch_size,
         device=device,
         warmup_samples=warmup_samples,
-        max_samples=1,
+        max_samples=max_samples,
     )
 
     summary["experiment_id"] = experiment_cfg.get("experiment", {}).get("id")

@@ -10,6 +10,7 @@ import torch.nn.functional as F
 
 from src.models.blocks import ResidualBlock
 from src.models.resnet_ee import ResNetEE18, ResNetEE34
+from src.models.weights import load_state_dict_file
 from src.utils.config import resolve_path
 
 
@@ -227,7 +228,7 @@ def build_full_ee_resnet(
         weights_path = resolve_path(weights_cfg.get("path"), repo_root)
 
     if weights_path:
-        state_dict = torch.load(weights_path, map_location=device)
+        state_dict = load_state_dict_file(weights_path, map_location=device)
         model.load_state_dict(state_dict)
 
     model.eval()
