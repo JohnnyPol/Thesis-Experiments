@@ -32,6 +32,8 @@
 - [ ] Reference the libraries that you use, why you use them very concisely.
 - [ ] Shift the focus to the distribution of the multi-model setup.
 - [ ] Write down that we trained the models in a Jupyter Notebook
+- [ ] Write the specs of the pis, the packages that we use, and why we chose them, their purpose.
+
 
 ## Cleanup
 - [ ] Implement Testing

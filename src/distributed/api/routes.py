@@ -4,6 +4,7 @@ import json
 
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from src.distributed.api.schemas import (
     ErrorResponse,
@@ -85,7 +86,8 @@ def create_router(runtime: WorkerRuntime) -> APIRouter:
                 device="cpu",
             )
 
-            terminal = execute_or_forward(
+            terminal = await run_in_threadpool(
+                execute_or_forward,
                 runtime=runtime,
                 metadata=meta,
                 tensor=tensor,

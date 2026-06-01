@@ -12,23 +12,10 @@ Run the setup script:
 ```bash
 scripts/setup_environment.sh
 ```
-
-On Windows PowerShell:
-
-```powershell
-.\scripts\setup_environment.ps1
-```
-
 To force installation of CPU PyTorch and TorchVision:
 
 ```bash
 scripts/setup_environment.sh --with-torch
-```
-
-Or on Windows PowerShell:
-
-```powershell
-.\scripts\setup_environment.ps1 -WithTorch
 ```
 
 Create and activate a virtual environment:
@@ -48,11 +35,6 @@ Install PyTorch and TorchVision separately when needed for Raspberry Pi CPU
 execution:
 
 ```bash
-python -m pip install \
-  --index-url https://download.pytorch.org/whl/cpu \
-  --extra-index-url https://www.piwheels.org/simple \
-  torch
-
 pip install torchvision --no-cache-dir \
   --index-url https://download.pytorch.org/whl/cpu \
   --extra-index-url https://www.piwheels.org/simple
