@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 import torch
 from codecarbon import EmissionsTracker
+from tqdm import tqdm
 
 from src.data.loaders import data_loader
 from src.distributed.client.fastapi_client import start_monitoring, stop_monitoring
@@ -205,6 +206,13 @@ def evaluate_distributed_ee(
     tracker.start()
     experiment_start = time.time()
     inferred_samples = 0
+    progress = tqdm(
+        total=target_total,
+        desc="Distributed inference",
+        unit="sample",
+        disable=not show_progress,
+        dynamic_ncols=True,
+    )
 
     try:
         with torch.no_grad():
@@ -281,24 +289,9 @@ def evaluate_distributed_ee(
                 per_sample_rows.append(row)
                 sample_index += 1
                 inferred_samples += 1
-
-                if show_progress:
-                    if target_total is not None:
-                        print(
-                            f"\rInferred {inferred_samples}/{target_total} samples",
-                            end="",
-                            flush=True,
-                        )
-                    else:
-                        print(
-                            f"\rInferred {inferred_samples} samples",
-                            end="",
-                            flush=True,
-                        )
-
-            if show_progress:
-                print()
+                progress.update(1)
     finally:
+        progress.close()
         experiment_end = time.time()
         tracker.stop()
         worker_monitoring_results = _stop_worker_monitors(

@@ -16,6 +16,7 @@ from typing import Any
 import pandas as pd
 import torch
 from codecarbon import EmissionsTracker
+from tqdm import tqdm
 
 from src.data.loaders import data_loader
 from src.distributed.client.fastapi_client import start_monitoring, stop_monitoring
@@ -348,6 +349,13 @@ def evaluate_multi_model_distributed_ee(
         if target_samples_per_model is not None
         else None
     )
+    progress = tqdm(
+        total=total_jobs,
+        desc="Distributed multi-model inference",
+        unit="model-sample",
+        disable=not show_progress,
+        dynamic_ncols=True,
+    )
 
     try:
         with ThreadPoolExecutor(max_workers=concurrency) as executor:
@@ -360,19 +368,7 @@ def evaluate_multi_model_distributed_ee(
                     row = done_future.result()
                     rows.append(row)
                     completed += 1
-                    if show_progress:
-                        if total_jobs is None:
-                            print(
-                                f"\rInferred {completed} model-samples",
-                                end="",
-                                flush=True,
-                            )
-                        else:
-                            print(
-                                f"\rInferred {completed}/{total_jobs} model-samples",
-                                end="",
-                                flush=True,
-                            )
+                    progress.update(1)
 
             max_pending = max(concurrency * 2, 1)
             sample_count = 0
@@ -412,10 +408,8 @@ def evaluate_multi_model_distributed_ee(
             while pending:
                 done, pending = wait(pending, return_when=FIRST_COMPLETED)
                 collect_done(done)
-
-            if show_progress:
-                print()
     finally:
+        progress.close()
         experiment_end = time.time()
         tracker.stop()
         worker_monitoring_results = _stop_worker_monitors(
