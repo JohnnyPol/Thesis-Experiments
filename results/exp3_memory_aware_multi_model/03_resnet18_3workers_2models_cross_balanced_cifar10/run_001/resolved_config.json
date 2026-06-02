@@ -1,0 +1,184 @@
+{
+  "experiment_config": {
+    "experiment": {
+      "id": "exp3_3_resnet18_cifar10",
+      "name": "resnet18_memory_aware_multi_model_cross_balanced_placement_cifar10",
+      "description": "Two early-exit ResNet-18 model instances with first partitions split and later partitions cross-balanced across all three workers on CIFAR-10."
+    },
+    "config_refs": {
+      "dataset": "configs/datasets/cifar10.yaml",
+      "model": "configs/models/resnet18_ee_entropy_cifar10.yaml",
+      "system": "configs/systems/homogeneous_3workers.yaml"
+    },
+    "runtime": {
+      "batch_size": 1,
+      "warmup_samples": 20,
+      "model_instance_count": 2,
+      "concurrency": 2,
+      "max_samples_per_model": null,
+      "save_per_sample_metrics": true,
+      "save_predictions": false,
+      "placement_strategy": "cross_balanced_partition_placement"
+    },
+    "placement": {
+      "rationale": "Keep first partitions on separate workers while distributing second and third partitions across the whole cluster.",
+      "assignments": {
+        "worker1": [
+          {
+            "model_instance_id": "model_0",
+            "partition_id": 0
+          },
+          {
+            "model_instance_id": "model_1",
+            "partition_id": 1
+          }
+        ],
+        "worker2": [
+          {
+            "model_instance_id": "model_1",
+            "partition_id": 0
+          },
+          {
+            "model_instance_id": "model_0",
+            "partition_id": 2
+          }
+        ],
+        "worker3": [
+          {
+            "model_instance_id": "model_0",
+            "partition_id": 1
+          },
+          {
+            "model_instance_id": "model_1",
+            "partition_id": 2
+          }
+        ]
+      },
+      "routes": {
+        "model_0": [
+          {
+            "worker_id": "worker1",
+            "partition_id": 0
+          },
+          {
+            "worker_id": "worker3",
+            "partition_id": 1
+          },
+          {
+            "worker_id": "worker2",
+            "partition_id": 2
+          }
+        ],
+        "model_1": [
+          {
+            "worker_id": "worker2",
+            "partition_id": 0
+          },
+          {
+            "worker_id": "worker1",
+            "partition_id": 1
+          },
+          {
+            "worker_id": "worker3",
+            "partition_id": 2
+          }
+        ]
+      },
+      "constraints": {
+        "max_first_partitions_per_worker": 1
+      }
+    },
+    "output": {
+      "dir": "./results/exp3_memory_aware_multi_model/03_resnet18_3workers_2models_cross_balanced_cifar10/run_001"
+    }
+  },
+  "dataset_config": {
+    "name": "cifar10",
+    "root": "./data",
+    "num_classes": 10,
+    "download": true,
+    "input": {
+      "image_size": 256,
+      "channels": 3
+    },
+    "normalization": {
+      "mean": [
+        0.4914,
+        0.4822,
+        0.4465
+      ],
+      "std": [
+        0.2023,
+        0.1994,
+        0.201
+      ]
+    },
+    "loader": {
+      "batch_size": 1,
+      "shuffle": false,
+      "num_workers": 0,
+      "pin_memory": false
+    },
+    "splits": {
+      "valid_size": 0.1,
+      "random_seed": 42
+    }
+  },
+  "model_config": {
+    "name": "resnet18_ee_entropy_cifar10",
+    "type": "early_exit",
+    "architecture": "resnet18",
+    "weights": {
+      "path": "./checkpoints/resnet18_ee_entropy.pth"
+    },
+    "early_exit": {
+      "criterion": "entropy",
+      "confidence_threshold": 0.9
+    }
+  },
+  "system_config": {
+    "system_name": "homogeneous_3workers",
+    "runtime": {
+      "request_timeout_sec": 30.0
+    },
+    "master": {
+      "role": "master",
+      "device": "cpu"
+    },
+    "pipeline_order": [
+      "worker1",
+      "worker2",
+      "worker3"
+    ],
+    "workers": [
+      {
+        "worker_id": "worker1",
+        "partition_id": 0,
+        "host": "0.0.0.0",
+        "connect_host": "192.168.0.102",
+        "port": 9101,
+        "device": "cpu",
+        "next_worker_id": "worker2"
+      },
+      {
+        "worker_id": "worker2",
+        "partition_id": 1,
+        "host": "0.0.0.0",
+        "connect_host": "192.168.0.104",
+        "port": 9102,
+        "device": "cpu",
+        "next_worker_id": "worker3"
+      },
+      {
+        "worker_id": "worker3",
+        "partition_id": 2,
+        "host": "0.0.0.0",
+        "connect_host": "192.168.0.103",
+        "port": 9103,
+        "device": "cpu",
+        "next_worker_id": null
+      }
+    ]
+  },
+  "repo_root": "/home/rpi/Thesis-Experiments"
+}
