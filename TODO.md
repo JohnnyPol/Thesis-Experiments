@@ -22,17 +22,17 @@
 
 ## Evaluation
 - [ ] After running all experiments, ask Grigoris about the charts we need to focus on and the tables.
+- [ ] Decide whether latency distributions should be analyzed per partition or per exit branch.
 - [*] Remove network bytes from the metrics
 - [ ] Organize better all the metrics
 
 ## Writing / Thesis
-- [ ] Remove selective offloading from the thesis and anything to do with the cloud
-- [ ] Remove UCB reference
-- [ ] Create a ResNet18EE and a ResNet34EE diagram using drawio to visualize how the input changes
-- [ ] Reference the libraries that you use, why you use them very concisely.
-- [ ] Shift the focus to the distribution of the multi-model setup.
-- [ ] Write down that we trained the models in a Jupyter Notebook
-- [ ] Write the specs of the pis, the packages that we use, and why we chose them, their purpose.
+- [*] Remove selective offloading from the thesis and anything to do with the cloud
+- [*] Create a ResNet18EE and a ResNet34EE diagram to visualize how the input changes
+- [*] Reference the libraries that you use, why you use them very concisely.
+- [*] Shift the focus to the distribution of the multi-model setup.
+- [*] Write down that we trained the models in a Jupyter Notebook
+- [*] Write the specs of the pis, the packages that we use, and why we chose them, their purpose.
 
 
 ## Cleanup
