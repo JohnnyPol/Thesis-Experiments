@@ -26,6 +26,22 @@
 - [*] Remove network bytes from the metrics
 - [ ] Organize better all the metrics
 
+
+group all exp1.* 
+average inference time per sample (latency per sample)
+- table: experiment | accuracy | latency | throughput | model | exit0 exit1 exit2 exit3 - experiments 1.1 1.2 1.3 
+- utilization (worker id - utilization) throughput, table:inference time (experiment, inference time), compare 1.2 1.3. 3 figures for 1.2 3 figures for
+accuracy is deterministic
+exp2:
+- avg inference time
+- node utilization for each, same as 1.3
+
+exp3.1 3.2 3.3:
+IT NEEDS A DIAGRAM
+barplot utilization
+- compare the experiments, find the best (subsection)
+- avg inference time
+
 ## Writing / Thesis
 - [*] Remove selective offloading from the thesis and anything to do with the cloud
 - [*] Create a ResNet18EE and a ResNet34EE diagram to visualize how the input changes
