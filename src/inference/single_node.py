@@ -17,8 +17,8 @@ from src.metrics.exits import (
     summarize_exit_counts,
     update_exit_counts,
 )
-from src.metrics.latency import (
-    compute_latency_stats,
+from src.metrics.inference_time import (
+    compute_inference_time_stats,
     compute_throughput,
     compute_total_inference_time,
 )
@@ -192,7 +192,7 @@ def evaluate_single_node(
 
     correct = 0
     total = 0
-    latencies: list[float] = []
+    inference_times: list[float] = []
     per_sample_rows: list[dict] = []
 
     exit_counts = initialize_exit_counts(4) if is_ee else None
@@ -244,8 +244,8 @@ def evaluate_single_node(
             outputs = model(images)
             end = time.time()
 
-            latency = end - start
-            latencies.append(latency)
+            inference_time = end - start
+            inference_times.append(inference_time)
 
             if is_ee:
                 logits, exit_id = outputs
@@ -262,7 +262,7 @@ def evaluate_single_node(
             row = {
                 "sample_index": sample_index,
                 "batch_size": int(labels.size(0)),
-                "latency_sec": float(latency),
+                "inference_time_sec": float(inference_time),
                 "predicted_class": int(predicted[0].item()),
                 "true_class": int(labels[0].item()),
                 "correct": int((predicted == labels).sum().item()),
@@ -283,10 +283,10 @@ def evaluate_single_node(
     total_inference_time_sec = compute_total_inference_time(
         experiment_start, experiment_end
     )
-    latency_stats = compute_latency_stats(latencies)
+    inference_time_stats = compute_inference_time_stats(inference_times)
     throughput = compute_throughput(total, total_inference_time_sec)
     node_utilization = compute_node_utilization(
-        latency_stats["busy_time_sec"],
+        inference_time_stats["busy_time_sec"],
         total_inference_time_sec,
     )
     accuracy = compute_accuracy(correct, total)
@@ -307,7 +307,7 @@ def evaluate_single_node(
         "carbon_kg": float(carbon_kg) if carbon_kg is not None else None,
         "energy_kWh": float(energy_kwh) if energy_kwh is not None else None,
     }
-    results.update(latency_stats)
+    results.update(inference_time_stats)
 
     if is_ee and exit_counts is not None:
         results.update(summarize_exit_counts(exit_counts, total))
@@ -341,7 +341,7 @@ def save_results(
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 
-    per_sample_path = out_path / "latencies.csv"
+    per_sample_path = out_path / "inference_times.csv"
     per_sample_df.to_csv(per_sample_path, index=False)
 
     config_dump_path = out_path / "resolved_config.json"

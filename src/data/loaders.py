@@ -1,15 +1,83 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
-from torch.utils.data import ConcatDataset, DataLoader
+from PIL import Image
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from torchvision import datasets, transforms
+
+
+class CIFAR101(Dataset):
+    """
+    CIFAR-10.1 v6 test-only dataset stored as NumPy arrays.
+    """
+
+    classes = [
+        "airplane",
+        "automobile",
+        "bird",
+        "cat",
+        "deer",
+        "dog",
+        "frog",
+        "horse",
+        "ship",
+        "truck",
+    ]
+    class_to_idx = {class_name: index for index, class_name in enumerate(classes)}
+
+    def __init__(
+        self,
+        root: str,
+        train: bool = False,
+        download: bool = False,
+        transform: Any | None = None,
+    ) -> None:
+        if train:
+            raise ValueError("CIFAR-10.1 is a test-only dataset.")
+
+        root_path = Path(root)
+        data_path = root_path / "cifar10.1_v6_data.npy"
+        labels_path = root_path / "cifar10.1_v6_labels.npy"
+
+        if not data_path.exists() or not labels_path.exists():
+            raise FileNotFoundError(
+                "CIFAR-10.1 v6 files were not found. Expected "
+                f"'{data_path}' and '{labels_path}'. Download them manually "
+                "from the CIFAR-10.1 repository before running evaluation."
+            )
+
+        self.data = np.load(data_path)
+        labels = np.load(labels_path).astype(int)
+
+        if len(self.data) != len(labels):
+            raise ValueError(
+                "CIFAR-10.1 data/label length mismatch: "
+                f"{len(self.data)} images and {len(labels)} labels."
+            )
+
+        self.targets = labels.tolist()
+        self.transform = transform
+
+    def __len__(self) -> int:
+        return len(self.targets)
+
+    def __getitem__(self, index: int):
+        image = Image.fromarray(self.data[index])
+        label = int(self.targets[index])
+
+        if self.transform is not None:
+            image = self.transform(image)
+
+        return image, label
 
 
 DATASET_BUILDERS = {
     "cifar10": datasets.CIFAR10,
+    "cifar10_1": CIFAR101,
     "cifar100": datasets.CIFAR100,
 }
 

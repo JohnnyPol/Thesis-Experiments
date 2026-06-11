@@ -1,0 +1,18 @@
+experiment:
+  id: exp1_1_resnet18_cifar10_1
+  name: resnet18_baseline_single_node_cifar10_1
+  description: Baseline ResNet-18 inference on a single worker node without early exits on CIFAR-10.1.
+
+config_refs:
+  dataset: configs/datasets/cifar10_1.yaml
+  model: configs/models/resnet18_baseline_cifar10.yaml
+  system: configs/systems/single_node_worker1.yaml
+
+runtime:
+  batch_size: 1
+  warmup_samples: 20
+  save_per_sample_metrics: true
+  save_predictions: false
+
+output:
+  dir: ./results/exp1_single_model/01_single_node_resnet18_baseline_cifar10_1/run_001

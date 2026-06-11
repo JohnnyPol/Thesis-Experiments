@@ -28,16 +28,13 @@
 
 
 group all exp1.* 
-average inference time per sample (latency per sample)
-- table: experiment | accuracy | latency | throughput | model | exit0 exit1 exit2 exit3 - experiments 1.1 1.2 1.3 
-- utilization (worker id - utilization) throughput, table:inference time (experiment, inference time), compare 1.2 1.3. 3 figures for 1.2 3 figures for
-accuracy is deterministic
+- table: experiment | accuracy | inference_time | throughput | model | exit0 exit1 exit2 exit3 - experiments 1.1 1.2 1.3 
+- utilization (worker id - utilization) throughput,
 exp2:
 - avg inference time
 - node utilization for each, same as 1.3
 
 exp3.1 3.2 3.3:
-IT NEEDS A DIAGRAM
 barplot utilization
 - compare the experiments, find the best (subsection)
 - avg inference time
@@ -49,6 +46,10 @@ barplot utilization
 - [*] Shift the focus to the distribution of the multi-model setup.
 - [*] Write down that we trained the models in a Jupyter Notebook
 - [*] Write the specs of the pis, the packages that we use, and why we chose them, their purpose.
+
+κανε group περισσοτερο το κειμενο, δεν χρειαζεται τοσο ξεχωριστα το καθενα. επισης τα bullet points γινονται ανετα δυο παραγραφοι, γιατι το exit μετα απο καθε residual block -> 
+δωσε λογο γιατι χρησιμοποιεις την καθε μετρικη που θα χρησιμοποιησεις οντως
+χρησιμοποιησε cifar10.1
 
 
 ## Cleanup

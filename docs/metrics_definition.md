@@ -1,7 +1,7 @@
 # Metrics Definition
 
 This document defines the main metrics written to `metrics.json`,
-`latencies.csv`, and the generated thesis tables.
+`inference_times.csv`, and the generated thesis tables.
 
 ## Common Metrics
 
@@ -12,9 +12,9 @@ This document defines the main metrics written to `metrics.json`,
 | `accuracy` | `num_correct / num_samples * 100`. |
 | `total_inference_time_sec` | Wall-clock measured interval for the experiment body, excluding setup and result writing. |
 | `throughput_samples_per_sec` | `num_samples / total_inference_time_sec`. |
-| `avg_latency_sec` | Mean measured latency per sample or model-sample. |
-| `p50_latency_sec`, `p95_latency_sec`, `p99_latency_sec` | Latency percentiles. |
-| `busy_time_sec` | Sum of measured per-sample latencies. |
+| `avg_inference_time_sec` | Mean time per sample or model-sample from inference start to prediction. |
+| `std_inference_time_sec`, `min_inference_time_sec`, `max_inference_time_sec` | Spread and range of measured per-sample inference times. |
+| `busy_time_sec` | Sum of measured per-sample inference times. |
 | `node_utilization` or `master_node_utilization` | `busy_time_sec / total_inference_time_sec`. For concurrent multi-model runs this can exceed a single sequential worker interpretation because jobs overlap. |
 
 ## Energy And Carbon
@@ -41,16 +41,16 @@ experiment-level estimates, not hardware power-meter readings.
 ## Distributed Communication Overhead
 
 Distributed runs record communication overhead as the non-compute portion of the
-master-observed inference latency:
+master-observed inference time:
 
 ```text
-communication_overhead_sec = latency_sec - remote_compute_time_sec
+communication_overhead_sec = inference_time_sec - remote_compute_time_sec
 ```
 
 Where:
 
-- `latency_sec` is the wall-clock time measured by the master for one sample or
-  model-sample.
+- `inference_time_sec` is the wall-clock time measured by the master for one
+  sample or model-sample, from inference request start to prediction.
 - `remote_compute_time_sec` is the sum of model compute time reported by the
   workers that handled that sample.
 
@@ -59,8 +59,9 @@ serialization, deserialization, HTTP handling, request forwarding, and response
 handling. Very small negative values can indicate timing noise between the
 master-observed wall-clock measurement and worker-reported compute durations.
 
-Per-sample rows in `latencies.csv` include:
+Per-sample rows in `inference_times.csv` include:
 
+- `inference_time_sec`
 - `remote_compute_time_sec`
 - `communication_overhead_sec`
 - `communication_overhead_ratio`
@@ -74,9 +75,6 @@ Aggregate fields in `metrics.json` include:
 - `communication_overhead_std_sec`
 - `communication_overhead_min_sec`
 - `communication_overhead_max_sec`
-- `communication_overhead_p50_sec`
-- `communication_overhead_p95_sec`
-- `communication_overhead_p99_sec`
 - `communication_overhead_ratio_avg`
 - `communication_overhead_ratio_total`
 
@@ -128,9 +126,7 @@ For each model instance, fields are prefixed with the model ID:
 - `model_0_num_samples`
 - `model_0_accuracy`
 - `model_0_throughput_samples_per_sec`
-- `model_0_avg_latency_sec`
-- `model_0_p95_latency_sec`
-- `model_0_p99_latency_sec`
+- `model_0_avg_inference_time_sec`
 - `model_0_exit_0_ratio` through `model_0_exit_3_ratio`
 - `model_0_<worker_id>_compute_time_total_sec`
 
@@ -181,8 +177,8 @@ These fields make it possible to verify that:
 The generated table files under `results/thesis_visualizations/**/tables/`
 normalize the raw metrics into thesis-friendly views:
 
-- `core_metrics`: accuracy, throughput, latency, communication overhead, and
-  sample count.
+- `core_metrics`: accuracy, throughput, inference time, communication overhead,
+  and sample count.
 - `energy_metrics`: master, worker, and total energy/carbon fields.
 - `exit_distribution`: exit ratios by experiment.
 - `worker_breakdown`: worker compute, utilization, energy, and carbon values.

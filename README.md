@@ -153,5 +153,5 @@ bash scripts/run/generate_exp2_thesis_artifacts.sh
 bash scripts/run/generate_exp3_thesis_artifacts.sh
 ```
 
-Each run directory contains `metrics.json`, `latencies.csv`, and
+Each run directory contains `metrics.json`, `inference_times.csv`, and
 `resolved_config.json`.

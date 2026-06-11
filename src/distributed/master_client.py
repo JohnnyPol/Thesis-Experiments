@@ -20,8 +20,9 @@ from src.metrics.exits import (
     summarize_exit_counts,
     update_exit_counts,
 )
-from src.metrics.latency import (
-    compute_latency_stats,
+from src.metrics.inference_time import (
+    compute_duration_stats,
+    compute_inference_time_stats,
     compute_throughput,
     compute_total_inference_time,
 )
@@ -110,7 +111,7 @@ def save_results(
     with open(out_path / "metrics.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 
-    per_sample_df.to_csv(out_path / "latencies.csv", index=False)
+    per_sample_df.to_csv(out_path / "inference_times.csv", index=False)
 
     with open(out_path / "resolved_config.json", "w", encoding="utf-8") as f:
         json.dump(config_bundle, f, indent=2)
@@ -186,7 +187,7 @@ def evaluate_distributed_ee(
 
     correct = 0
     total = 0
-    latencies: list[float] = []
+    inference_times: list[float] = []
     per_sample_rows: list[dict[str, Any]] = []
     exit_counts = initialize_exit_counts(4)
 
@@ -235,15 +236,17 @@ def evaluate_distributed_ee(
                 predicted_class = int(distributed_output["predicted_class"])
                 exit_id = int(distributed_output["exit_id"])
 
-                latency = end - start
-                latencies.append(latency)
+                inference_time = end - start
+                inference_times.append(inference_time)
 
                 remote_compute_time_sec = float(
                     distributed_output["remote_compute_time_sec"]
                 )
-                communication_overhead_sec = latency - remote_compute_time_sec
+                communication_overhead_sec = inference_time - remote_compute_time_sec
                 communication_overhead_ratio = (
-                    communication_overhead_sec / latency if latency > 0.0 else 0.0
+                    communication_overhead_sec / inference_time
+                    if inference_time > 0.0
+                    else 0.0
                 )
 
                 remote_compute_total += remote_compute_time_sec
@@ -268,7 +271,7 @@ def evaluate_distributed_ee(
                 row: dict[str, Any] = {
                     "sample_index": sample_index,
                     "batch_size": int(labels.size(0)),
-                    "latency_sec": float(latency),
+                    "inference_time_sec": float(inference_time),
                     "predicted_class": predicted_class,
                     "true_class": label_value,
                     "correct": is_correct,
@@ -302,11 +305,11 @@ def evaluate_distributed_ee(
     total_inference_time_sec = compute_total_inference_time(
         experiment_start, experiment_end
     )
-    latency_stats = compute_latency_stats(latencies)
-    communication_overhead_stats = compute_latency_stats(communication_overheads)
+    inference_time_stats = compute_inference_time_stats(inference_times)
+    communication_overhead_stats = compute_duration_stats(communication_overheads)
     throughput = compute_throughput(total, total_inference_time_sec)
     node_utilization = compute_node_utilization(
-        latency_stats["busy_time_sec"],
+        inference_time_stats["busy_time_sec"],
         total_inference_time_sec,
     )
     accuracy = compute_accuracy(correct, total)
@@ -330,39 +333,33 @@ def evaluate_distributed_ee(
             float(remote_compute_total / total) if total > 0 else 0.0
         ),
         "communication_overhead_total_sec": float(
-            communication_overhead_stats["busy_time_sec"]
+            communication_overhead_stats["duration_sum_sec"]
         ),
         "communication_overhead_avg_sec": float(
-            communication_overhead_stats["avg_latency_sec"]
+            communication_overhead_stats["avg_duration_sec"]
         ),
         "communication_overhead_std_sec": float(
-            communication_overhead_stats["std_latency_sec"]
+            communication_overhead_stats["std_duration_sec"]
         ),
         "communication_overhead_min_sec": float(
-            communication_overhead_stats["min_latency_sec"]
+            communication_overhead_stats["min_duration_sec"]
         ),
         "communication_overhead_max_sec": float(
-            communication_overhead_stats["max_latency_sec"]
-        ),
-        "communication_overhead_p50_sec": float(
-            communication_overhead_stats["p50_latency_sec"]
-        ),
-        "communication_overhead_p95_sec": float(
-            communication_overhead_stats["p95_latency_sec"]
-        ),
-        "communication_overhead_p99_sec": float(
-            communication_overhead_stats["p99_latency_sec"]
+            communication_overhead_stats["max_duration_sec"]
         ),
         "communication_overhead_ratio_avg": (
             float(sum(communication_overhead_ratios) / total) if total > 0 else 0.0
         ),
         "communication_overhead_ratio_total": (
-            float(communication_overhead_stats["busy_time_sec"] / sum(latencies))
-            if sum(latencies) > 0.0
+            float(
+                communication_overhead_stats["duration_sum_sec"]
+                / sum(inference_times)
+            )
+            if sum(inference_times) > 0.0
             else 0.0
         ),
     }
-    results.update(latency_stats)
+    results.update(inference_time_stats)
     results.update(summarize_exit_counts(exit_counts, total))
 
     worker_carbon_total = 0.0
