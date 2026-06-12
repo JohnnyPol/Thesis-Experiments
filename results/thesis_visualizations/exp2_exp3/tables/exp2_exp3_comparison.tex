@@ -1,0 +1,19 @@
+\begin{table}
+\centering
+\caption{Experiment 2 and Experiment 3 comparison.}
+\label{tab:exp2-exp3-comparison}
+\begin{tabular}{lllrrrrrrrrllrrr}
+\toprule
+experiment &      placement &      model &  accuracy &  inference\_time &  throughput &  communication\_overhead\_avg &  communication\_overhead\_ratio\_pct &  worker1\_util &  worker2\_util &  worker3\_util &             route\_model\_0 &             route\_model\_1 &  speedup\_vs\_exp2 &  inference\_time\_reduction\_pct &  communication\_overhead\_reduction\_pct \\
+\midrule
+       2.0 &          naive & ResNet18EE &     85.32 &          0.6940 &       2.881 &                      0.4084 &                             58.85 &         79.81 &          1.97 &          0.49 &                      None &                      None &            1.000 &                          0.00 &                              0.000000 \\
+       3.1 &    first-split & ResNet18EE &     85.32 &          0.4398 &       4.544 &                      0.1036 &                             23.56 &         56.04 &         92.68 &          4.07 & worker1->worker3->worker3 & worker2->worker3->worker3 &            1.577 &                         36.62 &                             74.627211 \\
+       3.2 & staggered-late & ResNet18EE &     85.32 &          0.4256 &       4.696 &                      0.1048 &                             24.62 &         54.45 &         93.54 &          2.67 & worker1->worker2->worker3 & worker2->worker3->worker3 &            1.630 &                         38.67 &                             74.338247 \\
+       3.3 & cross-balanced & ResNet18EE &     85.32 &          0.4212 &       4.745 &                      0.1045 &                             24.82 &         64.05 &         84.01 &          2.20 & worker1->worker3->worker2 & worker2->worker1->worker3 &            1.647 &                         39.31 &                             74.400092 \\
+       2.0 &          naive & ResNet34EE &     86.38 &          0.8101 &       2.468 &                      0.4640 &                             57.27 &         82.48 &          2.33 &          0.62 &                      None &                      None &            1.000 &                          0.00 &                              0.000000 \\
+       3.1 &    first-split & ResNet34EE &     86.38 &          0.5149 &       3.882 &                      0.1013 &                             19.68 &         57.34 &         97.92 &          5.28 & worker1->worker3->worker3 & worker2->worker3->worker3 &            1.573 &                         36.44 &                             78.156932 \\
+       3.2 & staggered-late & ResNet34EE &     86.38 &          0.4413 &       4.529 &                      0.1013 &                             22.95 &         59.12 &         90.50 &          4.37 & worker1->worker2->worker3 & worker2->worker3->worker3 &            1.835 &                         45.52 &                             78.164494 \\
+       3.3 & cross-balanced & ResNet34EE &     86.38 &          0.5092 &       3.926 &                      0.1026 &                             20.15 &         66.85 &         90.03 &          2.74 & worker1->worker3->worker2 & worker2->worker1->worker3 &            1.591 &                         37.14 &                             77.891057 \\
+\bottomrule
+\end{tabular}
+\end{table}

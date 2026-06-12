@@ -1,0 +1,9 @@
+experiment,placement,model,communication_overhead_avg,communication_overhead_ratio_pct,communication_overhead_reduction_pct
+2.0,naive,ResNet18EE,0.4084,58.85,0.0
+3.1,first-split,ResNet18EE,0.1036,23.56,74.62721145678285
+3.2,staggered-late,ResNet18EE,0.1048,24.62,74.33824666855546
+3.3,cross-balanced,ResNet18EE,0.1045,24.82,74.40009239566632
+2.0,naive,ResNet34EE,0.464,57.27,0.0
+3.1,first-split,ResNet34EE,0.1013,19.68,78.15693242940135
+3.2,staggered-late,ResNet34EE,0.1013,22.95,78.1644935458981
+3.3,cross-balanced,ResNet34EE,0.1026,20.15,77.89105689471211

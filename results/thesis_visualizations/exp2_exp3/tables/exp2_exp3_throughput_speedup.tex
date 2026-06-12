@@ -1,0 +1,20 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{Experiment 3 throughput speedup over Experiment 2.}
+\label{tab:exp2-exp3-throughput-speedup}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lllrrr}
+\toprule
+experiment &      placement &      model &  throughput &  speedup\_vs\_exp2 &  inference\_time\_reduction\_pct \\
+\midrule
+       3.1 &    first-split & ResNet18EE &       4.544 &            1.577 &                         36.62 \\
+       3.2 & staggered-late & ResNet18EE &       4.696 &            1.630 &                         38.67 \\
+       3.3 & cross-balanced & ResNet18EE &       4.745 &            1.647 &                         39.31 \\
+       3.1 &    first-split & ResNet34EE &       3.882 &            1.573 &                         36.44 \\
+       3.2 & staggered-late & ResNet34EE &       4.529 &            1.835 &                         45.52 \\
+       3.3 & cross-balanced & ResNet34EE &       3.926 &            1.591 &                         37.14 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

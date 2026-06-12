@@ -1,0 +1,7 @@
+experiment,accuracy,inference_time,throughput,model,exit0,exit1,exit2,exit3
+1.1,89.74,0.4466,2.191,ResNet18 Baseline,-,-,-,-
+1.1,88.57,0.8637,1.145,ResNet34 Baseline,-,-,-,-
+1.2,85.32,0.2659,3.63,ResNet18EE,68.18,24.04,6.15,1.63
+1.2,86.38,0.3906,2.49,ResNet34EE,78.02,17.39,2.99,1.6
+1.3,85.32,0.3582,2.704,ResNet18EE,68.18,24.04,6.15,1.63
+1.3,86.38,0.4149,2.344,ResNet34EE,78.02,17.39,2.99,1.6

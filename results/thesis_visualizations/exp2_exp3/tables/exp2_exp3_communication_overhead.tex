@@ -1,0 +1,19 @@
+\begin{table}
+\centering
+\caption{Communication overhead in Experiments 2 and 3.}
+\label{tab:exp2-exp3-communication-overhead}
+\begin{tabular}{lllrrr}
+\toprule
+experiment &      placement &      model &  communication\_overhead\_avg &  communication\_overhead\_ratio\_pct &  communication\_overhead\_reduction\_pct \\
+\midrule
+       2.0 &          naive & ResNet18EE &                      0.4084 &                             58.85 &                              0.000000 \\
+       3.1 &    first-split & ResNet18EE &                      0.1036 &                             23.56 &                             74.627211 \\
+       3.2 & staggered-late & ResNet18EE &                      0.1048 &                             24.62 &                             74.338247 \\
+       3.3 & cross-balanced & ResNet18EE &                      0.1045 &                             24.82 &                             74.400092 \\
+       2.0 &          naive & ResNet34EE &                      0.4640 &                             57.27 &                              0.000000 \\
+       3.1 &    first-split & ResNet34EE &                      0.1013 &                             19.68 &                             78.156932 \\
+       3.2 & staggered-late & ResNet34EE &                      0.1013 &                             22.95 &                             78.164494 \\
+       3.3 & cross-balanced & ResNet34EE &                      0.1026 &                             20.15 &                             77.891057 \\
+\bottomrule
+\end{tabular}
+\end{table}
