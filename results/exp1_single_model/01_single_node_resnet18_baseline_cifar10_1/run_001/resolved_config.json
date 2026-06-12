@@ -1,0 +1,81 @@
+{
+  "experiment_config": {
+    "experiment": {
+      "id": "exp1_1_resnet18_cifar10_1",
+      "name": "resnet18_baseline_single_node_cifar10_1",
+      "description": "Baseline ResNet-18 inference on a single worker node without early exits on CIFAR-10.1."
+    },
+    "config_refs": {
+      "dataset": "configs/datasets/cifar10_1.yaml",
+      "model": "configs/models/resnet18_baseline_cifar10.yaml",
+      "system": "configs/systems/single_node_worker1.yaml"
+    },
+    "runtime": {
+      "batch_size": 1,
+      "warmup_samples": 20,
+      "save_per_sample_metrics": true,
+      "save_predictions": false
+    },
+    "output": {
+      "dir": "./results/exp1_single_model/01_single_node_resnet18_baseline_cifar10_1/run_001"
+    }
+  },
+  "dataset_config": {
+    "name": "cifar10_1",
+    "root": "./data/cifar10.1",
+    "num_classes": 10,
+    "download": false,
+    "input": {
+      "image_size": 256,
+      "channels": 3
+    },
+    "normalization": {
+      "mean": [
+        0.4914,
+        0.4822,
+        0.4465
+      ],
+      "std": [
+        0.2023,
+        0.1994,
+        0.201
+      ]
+    },
+    "loader": {
+      "batch_size": 1,
+      "shuffle": false,
+      "num_workers": 0,
+      "pin_memory": false
+    }
+  },
+  "model_config": {
+    "name": "resnet18_baseline_cifar10",
+    "type": "baseline",
+    "architecture": "resnet18",
+    "weights": {
+      "path": "./checkpoints/resnet18_baseline.pth"
+    }
+  },
+  "system_config": {
+    "system_name": "single_node_worker1",
+    "mode": "single_node",
+    "node": {
+      "name": "worker1",
+      "role": "worker",
+      "host": "worker1"
+    },
+    "runtime": {
+      "device": "cpu"
+    },
+    "paths": {
+      "data_root": "./data",
+      "results_root": "./results"
+    },
+    "monitoring": {
+      "collect_latency": true,
+      "collect_energy": true,
+      "collect_system_stats": false
+    }
+  },
+  "repo_root": "/home/rpi/Thesis-Experiments"
+}
