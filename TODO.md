@@ -20,6 +20,8 @@ barplot utilization
 - [ ] make diagrams and tables for cifar10.1 as well
 - [ ] grafana monitoring for future work
 - [ ] προσθεσε την περιλιψη και τα keywords στα ελληνικα και στα αγγλικα
+- [ ] 3 Main συμπεράσματα, 
+MIXED PRECISION
 
 ## Writing / Thesis (Status of Chapters)
 - 1.1 Checked 
@@ -51,8 +53,9 @@ barplot utilization
 - throughput (CHECK)
 
 ## ΠΡΑΓΜΑΤΑ ΝΑ ΡΩΤΗΣΕΙΣ
-- Επεξηγηση κωδικα για το training επειδη τα βαρη τα πηρα ετοιμα
-- Γιατί έχουμε βάλει τα δύο πρώτα early exits στο πρώτο partition? Είναι αρκετά μεγάλο το ποσοστό που τερματίζουν στο πρώτο partition.
+- Επεξηγηση κωδικα για το training επειδη τα βαρη τα πηρα ετοιμα (CHECK)
+- Γιατί έχουμε βάλει τα δύο πρώτα early exits στο πρώτο partition? Είναι αρκετά μεγάλο το ποσοστό που τερματίζουν στο πρώτο partition. NA ΔΕΙΞΟΥΜΕ ΠΟΣΟ ΔΥΝΑΛΟΓΟ ΕΙΝΑΙ ΤΟ ΦΟΡΤΙΟ ΣΤΑ ΠΡΩΤΑ EXIT BRANCHES. ΠΩΣ ΜΠΟΡΟΥΜΕ ΝΑ ΑΞΙΟΠΟΙΗΣΟΥΜΕ ΑΥΤΗ ΤΗΝ ΑΝΙΣΟΡΟΠΙΑ; 
+FUTURE WORK -> PARTITION 0 (EXIT0) ... PARTITION 2 (EXIT 2 EXIT 3)
 
 Παρά την πρόοδο στα early-exit DNNs, δεν υπάρχει ακόμη πλήρως τυποποιημένη μέθοδος για το πώς συνδυάζονται βέλτιστα early exits, split computing, offloading decisions και resource-aware inference σε δυναμικά edge-cloud περιβάλλοντα
 
