@@ -43,6 +43,16 @@ WORKER_IDS = ("worker1", "worker2", "worker3")
 EXIT_IDS = (0, 1, 2, 3)
 DEFAULT_FIGURE_FORMATS = ("png", "pdf")
 
+THESIS_VISUALIZATIONS_DIR = Path("results/thesis_visualizations")
+EXP1_OUTPUT_SUBDIR = "exp1_single_model"
+EXP2_EXP3_OUTPUT_SUBDIR = "exp2_exp3"
+ENERGY_OUTPUT_SUBDIR = "energy"
+CIFAR10_DATASET_NAME = "cifar10"
+DATASET_NAME_ALIASES = {
+    "cifar10.1": "cifar10_1",
+    "cifar10-1": "cifar10_1",
+}
+
 EXP2_RESULTS_DIR = Path("results/exp2_multi_model")
 EXP3_RESULTS_DIR = Path("results/exp3_memory_aware_multi_model")
 ALL_RESULTS_DIRS = (
@@ -185,7 +195,12 @@ def build_exp1_3_worker_utilization_plot(
     ax.set_axisbelow(True)
     ax.legend(frameon=False)
 
-    _save_figure(fig, Path(output_dir), figure_name, formats)
+    _save_figure(
+        fig,
+        Path(output_dir),
+        _artifact_name(figure_name, dataset_name),
+        formats,
+    )
     return data
 
 
@@ -281,7 +296,12 @@ def build_experiment1_exit_distribution_plot(
     ax.set_axisbelow(True)
     ax.legend(frameon=False, ncol=4, loc="upper center", bbox_to_anchor=(0.5, 1.16))
 
-    _save_figure(fig, Path(output_dir), figure_name, formats)
+    _save_figure(
+        fig,
+        Path(output_dir),
+        _artifact_name(figure_name, dataset_name),
+        formats,
+    )
     return data
 
 
@@ -342,7 +362,12 @@ def build_exp2_exp3_throughput_speedup_plot(
     ax.set_axisbelow(True)
     ax.legend(frameon=False)
 
-    _save_figure(fig, Path(output_dir), figure_name, formats)
+    _save_figure(
+        fig,
+        Path(output_dir),
+        _artifact_name(figure_name, dataset_name),
+        formats,
+    )
     return data[
         [
             "experiment",
@@ -423,7 +448,12 @@ def build_exp2_best_exp3_worker_utilization_plot(
     axes[-1].legend(frameon=False, loc="upper right")
     fig.suptitle(f"Experiment 2 vs Experiment {best_experiment} Worker Utilization")
 
-    _save_figure(fig, Path(output_dir), figure_name, formats)
+    _save_figure(
+        fig,
+        Path(output_dir),
+        _artifact_name(figure_name, dataset_name),
+        formats,
+    )
     return data
 
 
@@ -482,7 +512,12 @@ def build_exp2_exp3_communication_overhead_plot(
     ax.set_axisbelow(True)
     ax.legend(frameon=False)
 
-    _save_figure(fig, Path(output_dir), figure_name, formats)
+    _save_figure(
+        fig,
+        Path(output_dir),
+        _artifact_name(figure_name, dataset_name),
+        formats,
+    )
     return data[
         [
             "experiment",
@@ -556,7 +591,12 @@ def build_distributed_node_utilization_plot(
     axes[-1].legend(frameon=False, loc="upper right")
     fig.suptitle("Node Utilization Across Distributed Experiments")
 
-    _save_figure(fig, Path(output_dir), figure_name, formats)
+    _save_figure(
+        fig,
+        Path(output_dir),
+        _artifact_name(figure_name, dataset_name),
+        formats,
+    )
     return data
 
 
@@ -624,7 +664,12 @@ def build_energy_per_sample_plot(
     ax.set_axisbelow(True)
     ax.legend(frameon=False)
 
-    _save_figure(fig, Path(output_dir), figure_name, formats)
+    _save_figure(
+        fig,
+        Path(output_dir),
+        _artifact_name(figure_name, dataset_name),
+        formats,
+    )
     return data[
         [
             "experiment",
@@ -719,7 +764,12 @@ def build_energy_breakdown_plot(
     axes[-1].legend(frameon=False, loc="upper right")
     fig.suptitle("Distributed Energy per Sample Breakdown")
 
-    _save_figure(fig, Path(output_dir), figure_name, formats)
+    _save_figure(
+        fig,
+        Path(output_dir),
+        _artifact_name(figure_name, dataset_name),
+        formats,
+    )
     return data
 
 
@@ -788,7 +838,12 @@ def build_energy_delay_product_plot(
     ax.set_axisbelow(True)
     ax.legend(frameon=False)
 
-    _save_figure(fig, Path(output_dir), figure_name, formats)
+    _save_figure(
+        fig,
+        Path(output_dir),
+        _artifact_name(figure_name, dataset_name),
+        formats,
+    )
     return data[
         [
             "experiment",
@@ -1040,10 +1095,48 @@ def _build_energy_breakdown_data(
     ).reset_index(drop=True)
 
 
+def _normalize_dataset_name(dataset_name: str | None) -> str | None:
+    if dataset_name is None:
+        return None
+    normalized = dataset_name.strip().lower()
+    if not normalized:
+        return None
+    return DATASET_NAME_ALIASES.get(normalized, normalized)
+
+
+def _dataset_suffix(dataset_name: str | None) -> str:
+    normalized = _normalize_dataset_name(dataset_name)
+    if normalized is None or normalized == CIFAR10_DATASET_NAME:
+        return ""
+    return f"_{normalized}"
+
+
+def _artifact_name(base_name: str, dataset_name: str | None) -> str:
+    return f"{base_name}{_dataset_suffix(dataset_name)}"
+
+
+def _dataset_output_dir(subdir: str, dataset_name: str | None) -> Path:
+    normalized = _normalize_dataset_name(dataset_name)
+    if normalized is None or normalized == CIFAR10_DATASET_NAME:
+        return THESIS_VISUALIZATIONS_DIR / subdir
+    return THESIS_VISUALIZATIONS_DIR / normalized / subdir
+
+
+def _resolve_output_dir(
+    requested_output_dir: str | Path | None,
+    subdir: str,
+    dataset_name: str | None,
+) -> Path:
+    if requested_output_dir is not None:
+        return Path(requested_output_dir)
+    return _dataset_output_dir(subdir, dataset_name)
+
+
 def _load_latest_metrics(
     results_dirs: Iterable[Path],
     dataset_name: str | None,
 ) -> list[tuple[Path, dict[str, Any]]]:
+    dataset_name = _normalize_dataset_name(dataset_name)
     latest_by_experiment: dict[str, tuple[Path, dict[str, Any]]] = {}
 
     for results_dir in results_dirs:
@@ -1067,6 +1160,7 @@ def _load_latest_experiment_metrics(
     results_dir: Path,
     dataset_name: str | None,
 ) -> list[tuple[Path, dict[str, Any]]]:
+    dataset_name = _normalize_dataset_name(dataset_name)
     latest_by_experiment: dict[str, tuple[Path, dict[str, Any]]] = {}
 
     for metrics_path in sorted(results_dir.rglob("metrics.json")):
@@ -1276,8 +1370,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
-        default="results/thesis_visualizations/exp1_single_model",
-        help="Directory where generated plot artifacts will be written.",
+        default=None,
+        help=(
+            "Directory where generated plot artifacts will be written. If omitted, "
+            "a dataset-aware thesis_visualizations subdirectory is used."
+        ),
     )
     parser.add_argument(
         "--dataset-name",
@@ -1312,14 +1409,29 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    dataset_name = args.dataset_name if args.dataset_name else None
+    dataset_name = _normalize_dataset_name(args.dataset_name)
+    exp1_output_dir = _resolve_output_dir(
+        args.output_dir,
+        EXP1_OUTPUT_SUBDIR,
+        dataset_name,
+    )
+    exp2_exp3_output_dir = _resolve_output_dir(
+        args.output_dir,
+        EXP2_EXP3_OUTPUT_SUBDIR,
+        dataset_name,
+    )
+    energy_output_dir = _resolve_output_dir(
+        args.output_dir,
+        ENERGY_OUTPUT_SUBDIR,
+        dataset_name,
+    )
     generated = []
 
     if args.plot in {"all", "exp1_3_worker_utilization"}:
         try:
             data = build_exp1_3_worker_utilization_plot(
                 results_dir=args.results_dir,
-                output_dir=args.output_dir,
+                output_dir=exp1_output_dir,
                 dataset_name=dataset_name,
             )
         except FileNotFoundError as exc:
@@ -1333,7 +1445,7 @@ def main() -> None:
         try:
             data = build_experiment1_exit_distribution_plot(
                 results_dir=args.results_dir,
-                output_dir=args.output_dir,
+                output_dir=exp1_output_dir,
                 dataset_name=dataset_name,
             )
         except FileNotFoundError as exc:
@@ -1348,7 +1460,7 @@ def main() -> None:
             data = build_exp2_exp3_throughput_speedup_plot(
                 exp2_results_dir=args.exp2_results_dir,
                 exp3_results_dir=args.exp3_results_dir,
-                output_dir=args.output_dir,
+                output_dir=exp2_exp3_output_dir,
                 dataset_name=dataset_name,
             )
         except FileNotFoundError as exc:
@@ -1363,7 +1475,7 @@ def main() -> None:
             data = build_exp2_best_exp3_worker_utilization_plot(
                 exp2_results_dir=args.exp2_results_dir,
                 exp3_results_dir=args.exp3_results_dir,
-                output_dir=args.output_dir,
+                output_dir=exp2_exp3_output_dir,
                 dataset_name=dataset_name,
                 best_experiment=args.best_experiment,
             )
@@ -1379,7 +1491,7 @@ def main() -> None:
             data = build_exp2_exp3_communication_overhead_plot(
                 exp2_results_dir=args.exp2_results_dir,
                 exp3_results_dir=args.exp3_results_dir,
-                output_dir=args.output_dir,
+                output_dir=exp2_exp3_output_dir,
                 dataset_name=dataset_name,
             )
         except FileNotFoundError as exc:
@@ -1393,7 +1505,7 @@ def main() -> None:
         try:
             data = build_distributed_node_utilization_plot(
                 results_dirs=ALL_DISTRIBUTED_RESULTS_DIRS,
-                output_dir=args.output_dir,
+                output_dir=exp2_exp3_output_dir,
                 dataset_name=dataset_name,
             )
         except FileNotFoundError as exc:
@@ -1407,7 +1519,7 @@ def main() -> None:
         try:
             data = build_energy_per_sample_plot(
                 results_dirs=ALL_RESULTS_DIRS,
-                output_dir=args.output_dir,
+                output_dir=energy_output_dir,
                 dataset_name=dataset_name,
             )
         except FileNotFoundError as exc:
@@ -1421,7 +1533,7 @@ def main() -> None:
         try:
             data = build_energy_breakdown_plot(
                 results_dirs=ALL_DISTRIBUTED_RESULTS_DIRS,
-                output_dir=args.output_dir,
+                output_dir=energy_output_dir,
                 dataset_name=dataset_name,
             )
         except FileNotFoundError as exc:
@@ -1435,7 +1547,7 @@ def main() -> None:
         try:
             data = build_energy_delay_product_plot(
                 results_dirs=ALL_RESULTS_DIRS,
-                output_dir=args.output_dir,
+                output_dir=energy_output_dir,
                 dataset_name=dataset_name,
             )
         except FileNotFoundError as exc:

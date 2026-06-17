@@ -1,0 +1,41 @@
+\begin{table}
+\centering
+\caption{Worker utilization across distributed experiments (CIFAR-10.1).}
+\label{tab:distributed-node-utilization-cifar10-1}
+\begin{tabular}{llllr}
+\toprule
+experiment &      placement &      model &  worker &  node\_utilization \\
+\midrule
+       1.3 &              - & ResNet18EE & worker1 &             66.22 \\
+       1.3 &              - & ResNet18EE & worker2 &              3.16 \\
+       1.3 &              - & ResNet18EE & worker3 &              1.31 \\
+       2.0 &          naive & ResNet18EE & worker1 &            154.65 \\
+       2.0 &          naive & ResNet18EE & worker2 &              5.68 \\
+       2.0 &          naive & ResNet18EE & worker3 &              2.14 \\
+       3.1 &    first-split & ResNet18EE & worker1 &             63.74 \\
+       3.1 &    first-split & ResNet18EE & worker2 &             71.11 \\
+       3.1 &    first-split & ResNet18EE & worker3 &             10.00 \\
+       3.2 & staggered-late & ResNet18EE & worker1 &             57.27 \\
+       3.2 & staggered-late & ResNet18EE & worker2 &             83.10 \\
+       3.2 & staggered-late & ResNet18EE & worker3 &              5.32 \\
+       3.3 & cross-balanced & ResNet18EE & worker1 &             67.07 \\
+       3.3 & cross-balanced & ResNet18EE & worker2 &             73.34 \\
+       3.3 & cross-balanced & ResNet18EE & worker3 &              4.16 \\
+       1.3 &              - & ResNet34EE & worker1 &             69.70 \\
+       1.3 &              - & ResNet34EE & worker2 &              4.38 \\
+       1.3 &              - & ResNet34EE & worker3 &              1.73 \\
+       2.0 &          naive & ResNet34EE & worker1 &            160.83 \\
+       2.0 &          naive & ResNet34EE & worker2 &              8.26 \\
+       2.0 &          naive & ResNet34EE & worker3 &              2.81 \\
+       3.1 &    first-split & ResNet34EE & worker1 &             63.01 \\
+       3.1 &    first-split & ResNet34EE & worker2 &             75.44 \\
+       3.1 &    first-split & ResNet34EE & worker3 &             15.24 \\
+       3.2 & staggered-late & ResNet34EE & worker1 &             56.81 \\
+       3.2 & staggered-late & ResNet34EE & worker2 &             91.99 \\
+       3.2 & staggered-late & ResNet34EE & worker3 &              8.52 \\
+       3.3 & cross-balanced & ResNet34EE & worker1 &             74.15 \\
+       3.3 & cross-balanced & ResNet34EE & worker2 &             72.25 \\
+       3.3 & cross-balanced & ResNet34EE & worker3 &              6.36 \\
+\bottomrule
+\end{tabular}
+\end{table}

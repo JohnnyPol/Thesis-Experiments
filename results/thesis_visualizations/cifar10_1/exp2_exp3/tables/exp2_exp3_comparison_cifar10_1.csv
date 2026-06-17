@@ -1,0 +1,9 @@
+experiment,placement,model,accuracy,inference_time,throughput,communication_overhead_avg,communication_overhead_ratio_pct,worker1_util,worker2_util,worker3_util,route_model_0,route_model_1,speedup_vs_exp2,inference_time_reduction_pct,communication_overhead_reduction_pct
+2.0,naive,ResNet18EE,75.45,0.7043,2.838,0.1319,18.72,154.65,5.68,2.14,-,-,1.0,0.0,0.0
+3.1,first-split,ResNet18EE,75.45,0.3795,5.262,0.1042,27.46,63.74,71.11,10.0,worker1->worker3->worker3,worker2->worker3->worker3,1.854,46.12,20.96634788023567
+3.2,staggered-late,ResNet18EE,75.45,0.3948,5.058,0.1068,27.05,57.27,83.1,5.32,worker1->worker2->worker3,worker2->worker3->worker3,1.782,43.94,19.015397795055993
+3.3,cross-balanced,ResNet18EE,75.45,0.3864,5.168,0.1066,27.6,67.07,73.34,4.16,worker1->worker3->worker2,worker2->worker1->worker3,1.821,45.14,19.13017343131798
+2.0,naive,ResNet34EE,77.35,0.8922,2.241,0.125,14.01,160.83,8.26,2.81,-,-,1.0,0.0,0.0
+3.1,first-split,ResNet34EE,77.35,0.4304,4.641,0.0992,23.05,63.01,75.44,15.24,worker1->worker3->worker3,worker2->worker3->worker3,2.071,51.76,20.663867025072783
+3.2,staggered-late,ResNet34EE,77.35,0.4842,4.125,0.1028,21.23,56.81,91.99,8.52,worker1->worker2->worker3,worker2->worker3->worker3,1.841,45.73,17.784963954940437
+3.3,cross-balanced,ResNet34EE,77.35,0.4282,4.664,0.1007,23.51,74.15,72.25,6.36,worker1->worker3->worker2,worker2->worker1->worker3,2.081,52.0,19.47421733353487

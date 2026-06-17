@@ -1,0 +1,23 @@
+\begin{table}
+\centering
+\caption{Worker utilization for Experiment 2 and Experiment 3.2 (CIFAR-10.1).}
+\label{tab:exp2-best-exp3-worker-utilization-cifar10-1}
+\begin{tabular}{llllr}
+\toprule
+experiment &      placement &      model &  worker &  node\_utilization \\
+\midrule
+       2.0 &          naive & ResNet18EE & worker1 &            154.65 \\
+       2.0 &          naive & ResNet18EE & worker2 &              5.68 \\
+       2.0 &          naive & ResNet18EE & worker3 &              2.14 \\
+       3.2 & staggered-late & ResNet18EE & worker1 &             57.27 \\
+       3.2 & staggered-late & ResNet18EE & worker2 &             83.10 \\
+       3.2 & staggered-late & ResNet18EE & worker3 &              5.32 \\
+       2.0 &          naive & ResNet34EE & worker1 &            160.83 \\
+       2.0 &          naive & ResNet34EE & worker2 &              8.26 \\
+       2.0 &          naive & ResNet34EE & worker3 &              2.81 \\
+       3.2 & staggered-late & ResNet34EE & worker1 &             56.81 \\
+       3.2 & staggered-late & ResNet34EE & worker2 &             91.99 \\
+       3.2 & staggered-late & ResNet34EE & worker3 &              8.52 \\
+\bottomrule
+\end{tabular}
+\end{table}

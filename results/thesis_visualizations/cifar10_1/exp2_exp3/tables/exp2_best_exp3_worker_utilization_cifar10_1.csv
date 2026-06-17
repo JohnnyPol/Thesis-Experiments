@@ -1,0 +1,13 @@
+experiment,placement,model,worker,node_utilization
+2.0,naive,ResNet18EE,worker1,154.65
+2.0,naive,ResNet18EE,worker2,5.68
+2.0,naive,ResNet18EE,worker3,2.14
+3.2,staggered-late,ResNet18EE,worker1,57.27
+3.2,staggered-late,ResNet18EE,worker2,83.1
+3.2,staggered-late,ResNet18EE,worker3,5.32
+2.0,naive,ResNet34EE,worker1,160.83
+2.0,naive,ResNet34EE,worker2,8.26
+2.0,naive,ResNet34EE,worker3,2.81
+3.2,staggered-late,ResNet34EE,worker1,56.81
+3.2,staggered-late,ResNet34EE,worker2,91.99
+3.2,staggered-late,ResNet34EE,worker3,8.52

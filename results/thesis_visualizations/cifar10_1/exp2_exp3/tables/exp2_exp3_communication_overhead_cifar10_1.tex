@@ -1,0 +1,19 @@
+\begin{table}
+\centering
+\caption{Communication overhead in Experiments 2 and 3 (CIFAR-10.1).}
+\label{tab:exp2-exp3-communication-overhead-cifar10-1}
+\begin{tabular}{lllrrr}
+\toprule
+experiment &      placement &      model &  communication\_overhead\_avg &  communication\_overhead\_ratio\_pct &  communication\_overhead\_reduction\_pct \\
+\midrule
+       2.0 &          naive & ResNet18EE &                      0.1319 &                             18.72 &                              0.000000 \\
+       3.1 &    first-split & ResNet18EE &                      0.1042 &                             27.46 &                             20.966348 \\
+       3.2 & staggered-late & ResNet18EE &                      0.1068 &                             27.05 &                             19.015398 \\
+       3.3 & cross-balanced & ResNet18EE &                      0.1066 &                             27.60 &                             19.130173 \\
+       2.0 &          naive & ResNet34EE &                      0.1250 &                             14.01 &                              0.000000 \\
+       3.1 &    first-split & ResNet34EE &                      0.0992 &                             23.05 &                             20.663867 \\
+       3.2 & staggered-late & ResNet34EE &                      0.1028 &                             21.23 &                             17.784964 \\
+       3.3 & cross-balanced & ResNet34EE &                      0.1007 &                             23.51 &                             19.474217 \\
+\bottomrule
+\end{tabular}
+\end{table}

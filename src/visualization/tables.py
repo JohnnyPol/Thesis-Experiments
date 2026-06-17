@@ -38,6 +38,15 @@ MODEL_SORT_ORDER = {
 
 WORKER_IDS = ("worker1", "worker2", "worker3")
 
+THESIS_VISUALIZATIONS_DIR = Path("results/thesis_visualizations")
+EXP1_OUTPUT_SUBDIR = "exp1_single_model"
+EXP2_EXP3_OUTPUT_SUBDIR = "exp2_exp3"
+CIFAR10_DATASET_NAME = "cifar10"
+DATASET_NAME_ALIASES = {
+    "cifar10.1": "cifar10_1",
+    "cifar10-1": "cifar10_1",
+}
+
 EXP2_RESULTS_DIR = Path("results/exp2_multi_model")
 EXP3_RESULTS_DIR = Path("results/exp3_memory_aware_multi_model")
 ALL_DISTRIBUTED_RESULTS_DIRS = (
@@ -92,8 +101,9 @@ def build_experiment1_core_table(
     table = _sort_experiment1_table(table)
     table = _round_experiment1_table(table)
 
-    csv_path = tables_path / f"{table_name}.csv"
-    tex_path = tables_path / f"{table_name}.tex"
+    artifact_name = _artifact_name(table_name, dataset_name)
+    csv_path = tables_path / f"{artifact_name}.csv"
+    tex_path = tables_path / f"{artifact_name}.tex"
 
     table.to_csv(csv_path, index=False, na_rep="-")
     table.to_latex(
@@ -101,8 +111,8 @@ def build_experiment1_core_table(
         index=False,
         na_rep="-",
         escape=True,
-        caption="Experiment 1 core metrics.",
-        label="tab:experiment1-core-metrics",
+        caption=_caption("Experiment 1 core metrics.", dataset_name),
+        label=_table_label("tab:experiment1-core-metrics", dataset_name),
     )
 
     return table
@@ -150,9 +160,12 @@ def build_exp2_exp3_comparison_table(
         _write_table(
             table,
             Path(output_dir),
-            table_name,
-            caption="Experiment 2 and Experiment 3 comparison.",
-            label="tab:exp2-exp3-comparison",
+            _artifact_name(table_name, dataset_name),
+            caption=_caption(
+                "Experiment 2 and Experiment 3 comparison.",
+                dataset_name,
+            ),
+            label=_table_label("tab:exp2-exp3-comparison", dataset_name),
         )
     return table
 
@@ -187,9 +200,12 @@ def build_exp2_exp3_speedup_table(
     _write_table(
         table,
         Path(output_dir),
-        table_name,
-        caption="Experiment 3 throughput speedup over Experiment 2.",
-        label="tab:exp2-exp3-throughput-speedup",
+        _artifact_name(table_name, dataset_name),
+        caption=_caption(
+            "Experiment 3 throughput speedup over Experiment 2.",
+            dataset_name,
+        ),
+        label=_table_label("tab:exp2-exp3-throughput-speedup", dataset_name),
     )
     return table
 
@@ -218,9 +234,12 @@ def build_exp2_best_exp3_worker_utilization_table(
     _write_table(
         table,
         Path(output_dir),
-        table_name,
-        caption=f"Worker utilization for Experiment 2 and Experiment {best_experiment}.",
-        label="tab:exp2-best-exp3-worker-utilization",
+        _artifact_name(table_name, dataset_name),
+        caption=_caption(
+            f"Worker utilization for Experiment 2 and Experiment {best_experiment}.",
+            dataset_name,
+        ),
+        label=_table_label("tab:exp2-best-exp3-worker-utilization", dataset_name),
     )
     return table
 
@@ -255,9 +274,12 @@ def build_exp2_exp3_communication_overhead_table(
     _write_table(
         table,
         Path(output_dir),
-        table_name,
-        caption="Communication overhead in Experiments 2 and 3.",
-        label="tab:exp2-exp3-communication-overhead",
+        _artifact_name(table_name, dataset_name),
+        caption=_caption(
+            "Communication overhead in Experiments 2 and 3.",
+            dataset_name,
+        ),
+        label=_table_label("tab:exp2-exp3-communication-overhead", dataset_name),
     )
     return table
 
@@ -309,17 +331,85 @@ def build_distributed_node_utilization_table(
         _write_table(
             table,
             Path(output_dir),
-            table_name,
-            caption="Worker utilization across distributed experiments.",
-            label="tab:distributed-node-utilization",
+            _artifact_name(table_name, dataset_name),
+            caption=_caption(
+                "Worker utilization across distributed experiments.",
+                dataset_name,
+            ),
+            label=_table_label("tab:distributed-node-utilization", dataset_name),
         )
     return table
+
+
+def _normalize_dataset_name(dataset_name: str | None) -> str | None:
+    if dataset_name is None:
+        return None
+    normalized = dataset_name.strip().lower()
+    if not normalized:
+        return None
+    return DATASET_NAME_ALIASES.get(normalized, normalized)
+
+
+def _dataset_suffix(dataset_name: str | None) -> str:
+    normalized = _normalize_dataset_name(dataset_name)
+    if normalized is None or normalized == CIFAR10_DATASET_NAME:
+        return ""
+    return f"_{normalized}"
+
+
+def _dataset_label_suffix(dataset_name: str | None) -> str:
+    normalized = _normalize_dataset_name(dataset_name)
+    if normalized is None or normalized == CIFAR10_DATASET_NAME:
+        return ""
+    return "-" + normalized.replace("_", "-")
+
+
+def _dataset_display_name(dataset_name: str | None) -> str | None:
+    normalized = _normalize_dataset_name(dataset_name)
+    if normalized is None or normalized == CIFAR10_DATASET_NAME:
+        return None
+    if normalized == "cifar10_1":
+        return "CIFAR-10.1"
+    return normalized.upper()
+
+
+def _artifact_name(base_name: str, dataset_name: str | None) -> str:
+    return f"{base_name}{_dataset_suffix(dataset_name)}"
+
+
+def _table_label(base_label: str, dataset_name: str | None) -> str:
+    return f"{base_label}{_dataset_label_suffix(dataset_name)}"
+
+
+def _caption(base_caption: str, dataset_name: str | None) -> str:
+    display_name = _dataset_display_name(dataset_name)
+    if display_name is None:
+        return base_caption
+    return f"{base_caption.rstrip('.')} ({display_name})."
+
+
+def _dataset_output_dir(subdir: str, dataset_name: str | None) -> Path:
+    normalized = _normalize_dataset_name(dataset_name)
+    if normalized is None or normalized == CIFAR10_DATASET_NAME:
+        return THESIS_VISUALIZATIONS_DIR / subdir
+    return THESIS_VISUALIZATIONS_DIR / normalized / subdir
+
+
+def _resolve_output_dir(
+    requested_output_dir: str | Path | None,
+    subdir: str,
+    dataset_name: str | None,
+) -> Path:
+    if requested_output_dir is not None:
+        return Path(requested_output_dir)
+    return _dataset_output_dir(subdir, dataset_name)
 
 
 def _load_latest_experiment1_metrics(
     results_dir: Path,
     dataset_name: str | None,
 ) -> list[tuple[Path, dict[str, Any]]]:
+    dataset_name = _normalize_dataset_name(dataset_name)
     latest_by_experiment: dict[str, tuple[Path, dict[str, Any]]] = {}
 
     for metrics_path in sorted(results_dir.rglob("metrics.json")):
@@ -341,6 +431,7 @@ def _load_latest_metrics(
     results_dirs: Iterable[Path],
     dataset_name: str | None,
 ) -> list[tuple[Path, dict[str, Any]]]:
+    dataset_name = _normalize_dataset_name(dataset_name)
     latest_by_experiment: dict[str, tuple[Path, dict[str, Any]]] = {}
 
     for results_dir in results_dirs:
@@ -666,8 +757,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
-        default="results/thesis_visualizations/exp1_single_model",
-        help="Directory where generated table artifacts will be written.",
+        default=None,
+        help=(
+            "Directory where generated table artifacts will be written. If omitted, "
+            "a dataset-aware thesis_visualizations subdirectory is used."
+        ),
     )
     parser.add_argument(
         "--dataset-name",
@@ -682,6 +776,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--table",
         choices=(
+            "all",
             "experiment1_core",
             "exp2_exp3_comparison",
             "exp2_exp3_speedup",
@@ -703,81 +798,92 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    dataset_name = args.dataset_name if args.dataset_name else None
+    dataset_name = _normalize_dataset_name(args.dataset_name)
+    exp1_output_dir = _resolve_output_dir(
+        args.output_dir,
+        EXP1_OUTPUT_SUBDIR,
+        dataset_name,
+    )
+    exp2_exp3_output_dir = _resolve_output_dir(
+        args.output_dir,
+        EXP2_EXP3_OUTPUT_SUBDIR,
+        dataset_name,
+    )
     generated_tables: list[tuple[str, pd.DataFrame]] = []
 
-    if args.table == "experiment1_core":
+    if args.table in {"all", "experiment1_core"}:
         generated_tables.append(
             (
                 "experiment1_core",
                 build_experiment1_core_table(
                     results_dir=args.results_dir,
-                    output_dir=args.output_dir,
+                    output_dir=exp1_output_dir,
                     dataset_name=dataset_name,
                     table_name=args.table_name,
                 ),
             )
         )
-    elif args.table in {"exp2_exp3_comparison", "all_exp2_exp3"}:
+
+    if args.table in {"all", "exp2_exp3_comparison", "all_exp2_exp3"}:
         generated_tables.append(
             (
                 "exp2_exp3_comparison",
                 build_exp2_exp3_comparison_table(
                     exp2_results_dir=args.exp2_results_dir,
                     exp3_results_dir=args.exp3_results_dir,
-                    output_dir=args.output_dir,
+                    output_dir=exp2_exp3_output_dir,
                     dataset_name=dataset_name,
                 ),
             )
         )
 
-    if args.table in {"exp2_exp3_speedup", "all_exp2_exp3"}:
+    if args.table in {"all", "exp2_exp3_speedup", "all_exp2_exp3"}:
         generated_tables.append(
             (
                 "exp2_exp3_speedup",
                 build_exp2_exp3_speedup_table(
                     exp2_results_dir=args.exp2_results_dir,
                     exp3_results_dir=args.exp3_results_dir,
-                    output_dir=args.output_dir,
+                    output_dir=exp2_exp3_output_dir,
                     dataset_name=dataset_name,
                 ),
             )
         )
 
-    if args.table in {"exp2_best_exp3_worker_utilization", "all_exp2_exp3"}:
+    if args.table in {"all", "exp2_best_exp3_worker_utilization", "all_exp2_exp3"}:
         generated_tables.append(
             (
                 "exp2_best_exp3_worker_utilization",
                 build_exp2_best_exp3_worker_utilization_table(
                     exp2_results_dir=args.exp2_results_dir,
                     exp3_results_dir=args.exp3_results_dir,
-                    output_dir=args.output_dir,
+                    output_dir=exp2_exp3_output_dir,
                     dataset_name=dataset_name,
                     best_experiment=args.best_experiment,
                 ),
             )
         )
 
-    if args.table in {"exp2_exp3_communication_overhead", "all_exp2_exp3"}:
+    if args.table in {"all", "exp2_exp3_communication_overhead", "all_exp2_exp3"}:
         generated_tables.append(
             (
                 "exp2_exp3_communication_overhead",
                 build_exp2_exp3_communication_overhead_table(
                     exp2_results_dir=args.exp2_results_dir,
                     exp3_results_dir=args.exp3_results_dir,
-                    output_dir=args.output_dir,
+                    output_dir=exp2_exp3_output_dir,
                     dataset_name=dataset_name,
                 ),
             )
         )
 
-    if args.table in {"distributed_node_utilization", "all_exp2_exp3"}:
+    if args.table in {"all", "distributed_node_utilization", "all_exp2_exp3"}:
         generated_tables.append(
             (
                 "distributed_node_utilization",
                 build_distributed_node_utilization_table(
                     results_dirs=ALL_DISTRIBUTED_RESULTS_DIRS,
-                    output_dir=args.output_dir,
+                    output_dir=exp2_exp3_output_dir,
                     dataset_name=dataset_name,
                 ),
             )

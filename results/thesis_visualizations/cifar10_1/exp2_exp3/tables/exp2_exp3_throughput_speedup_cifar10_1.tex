@@ -1,0 +1,17 @@
+\begin{table}
+\centering
+\caption{Experiment 3 throughput speedup over Experiment 2 (CIFAR-10.1).}
+\label{tab:exp2-exp3-throughput-speedup-cifar10-1}
+\begin{tabular}{lllrrr}
+\toprule
+experiment &      placement &      model &  throughput &  speedup\_vs\_exp2 &  inference\_time\_reduction\_pct \\
+\midrule
+       3.1 &    first-split & ResNet18EE &       5.262 &            1.854 &                         46.12 \\
+       3.2 & staggered-late & ResNet18EE &       5.058 &            1.782 &                         43.94 \\
+       3.3 & cross-balanced & ResNet18EE &       5.168 &            1.821 &                         45.14 \\
+       3.1 &    first-split & ResNet34EE &       4.641 &            2.071 &                         51.76 \\
+       3.2 & staggered-late & ResNet34EE &       4.125 &            1.841 &                         45.73 \\
+       3.3 & cross-balanced & ResNet34EE &       4.664 &            2.081 &                         52.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
