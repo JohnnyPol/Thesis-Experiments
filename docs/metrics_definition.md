@@ -1,187 +1,119 @@
 # Metrics Definition
 
-This document defines the main metrics written to `metrics.json`,
-`inference_times.csv`, and the generated thesis tables.
+This reference defines metrics produced by current inference code and legacy names found in stored CIFAR-10 results. An **inference task** is one `(input image, logical model instance)` pair.
 
-## Common Metrics
+## Files and schema versions
 
-| Metric | Meaning |
+Current runs write `metrics.json`, `inference_times.csv`, and `resolved_config.json`. Archived CIFAR-10 runs predate a naming cleanup:
+
+| Meaning | Archived CIFAR-10 | Current/CIFAR-10.1 |
+| --- | --- | --- |
+| Per-task CSV | `latencies.csv` | `inference_times.csv` |
+| Per-task time | `latency_sec` | `inference_time_sec` |
+| Mean | `avg_latency_sec` | `avg_inference_time_sec` |
+| Spread/range | `std/min/max_latency_sec` | `std/min/max_inference_time_sec` |
+| Per-instance mean | `<model>_avg_latency_sec` | `<model>_avg_inference_time_sec` |
+
+The table and plot modules explicitly accept both aggregate schemas.
+
+## Task counts and accuracy
+
+| Field | Definition |
 | --- | --- |
-| `num_samples` | Number of measured samples. In multi-model experiments this is model-sample jobs, so two model instances over 10,000 images becomes 20,000 samples. |
-| `num_correct` | Number of correct predictions. |
-| `accuracy` | `num_correct / num_samples * 100`. |
-| `total_inference_time_sec` | Wall-clock measured interval for the experiment body, excluding setup and result writing. |
-| `throughput_samples_per_sec` | `num_samples / total_inference_time_sec`. |
-| `avg_inference_time_sec` | Mean time per sample or model-sample from inference start to prediction. |
-| `std_inference_time_sec`, `min_inference_time_sec`, `max_inference_time_sec` | Spread and range of measured per-sample inference times. |
-| `busy_time_sec` | Sum of measured per-sample inference times. |
-| `node_utilization` or `master_node_utilization` | `busy_time_sec / total_inference_time_sec`. For concurrent multi-model runs this can exceed a single sequential worker interpretation because jobs overlap. |
+| `num_samples` | Number of measured tasks |
+| `num_correct` | Correctly classified tasks |
+| `accuracy` | `100 × num_correct / num_samples` |
 
-## Energy And Carbon
+Single-model task count equals test-image count. With two instances, CIFAR-10 produces 20,000 tasks and CIFAR-10.1 produces 4,000.
 
-Single-node runs write:
+## Timing and throughput
 
-- `energy_kWh`
-- `carbon_kg`
+For task `j`, `t_j` is local model time in single-node mode and master-observed end-to-end time in distributed mode.
 
-Distributed runs write master, worker, and total fields:
+| Field | Definition |
+| --- | --- |
+| `avg_inference_time_sec` | Mean of `t_j` |
+| `std_inference_time_sec` | Population standard deviation |
+| `min_inference_time_sec`, `max_inference_time_sec` | Observed range |
+| `busy_time_sec` | `Σ_j t_j` |
+| `total_inference_time_sec` | Measured wall-clock experiment body, excluding warm-up |
+| `throughput_samples_per_sec` | `num_samples / total_inference_time_sec` |
 
-- `master_energy_kWh`
-- `master_carbon_kg`
-- `<worker_id>_energy_kWh`
-- `<worker_id>_carbon_kg`
-- `workers_energy_kWh_total`
-- `workers_carbon_kg_total`
-- `system_energy_kWh_total`
-- `system_carbon_kg_total`
+Busy time sums task intervals; total inference time is wall clock. They differ under concurrency.
 
-These values come from CodeCarbon trackers. They should be treated as
-experiment-level estimates, not hardware power-meter readings.
+## Early-exit metrics
 
-## Distributed Communication Overhead
+| Exit | Location | Fields |
+| --- | --- | --- |
+| `0` | After `layer0` | `exit_0_count`, `exit_0_ratio` |
+| `1` | After `layer1` | `exit_1_count`, `exit_1_ratio` |
+| `2` | After `layer2` | `exit_2_count`, `exit_2_ratio` |
+| `3` | Final classifier | `exit_3_count`, `exit_3_ratio` |
 
-Distributed runs record communication overhead as the non-compute portion of the
-master-observed inference time:
+Each ratio is `exit_i_count / num_samples`. Baseline files keep these fields as `null`. Partition 0 runs for every task; later partitions run only for tasks that reject earlier exits.
+
+## Utilization
 
 ```text
-communication_overhead_sec = inference_time_sec - remote_compute_time_sec
+node_utilization = busy_time_sec / total_inference_time_sec
+
+<worker>_node_utilization =
+    <worker>_compute_time_total_sec / total_inference_time_sec
 ```
 
-Where:
+Distributed master utilization uses master-observed task times. Worker utilization is **application-level normalized compute load**, not operating-system CPU utilization. Concurrent compute intervals can overlap, so values can exceed 100%.
 
-- `inference_time_sec` is the wall-clock time measured by the master for one
-  sample or model-sample, from inference request start to prediction.
-- `remote_compute_time_sec` is the sum of model compute time reported by the
-  workers that handled that sample.
+Worker fields include compute totals/means, utilization, energy/carbon, and—for Experiment 3—assigned partitions and counts of assigned stages 0/1/2.
 
-This metric includes network transfer time plus protocol/runtime costs such as
-serialization, deserialization, HTTP handling, request forwarding, and response
-handling. Very small negative values can indicate timing noise between the
-master-observed wall-clock measurement and worker-reported compute durations.
-
-Per-sample rows in `inference_times.csv` include:
-
-- `inference_time_sec`
-- `remote_compute_time_sec`
-- `communication_overhead_sec`
-- `communication_overhead_ratio`
-
-Aggregate fields in `metrics.json` include:
-
-- `remote_compute_time_total_sec`
-- `remote_compute_time_avg_sec`
-- `communication_overhead_total_sec`
-- `communication_overhead_avg_sec`
-- `communication_overhead_std_sec`
-- `communication_overhead_min_sec`
-- `communication_overhead_max_sec`
-- `communication_overhead_ratio_avg`
-- `communication_overhead_ratio_total`
-
-## Early-Exit Metrics
-
-Early-exit runs report counts and ratios for four exit IDs:
-
-- `exit_0_count`, `exit_0_ratio`
-- `exit_1_count`, `exit_1_ratio`
-- `exit_2_count`, `exit_2_ratio`
-- `exit_3_count`, `exit_3_ratio`
-
-Exits `0`, `1`, and `2` are intermediate heads. Exit `3` is the final classifier.
-
-For baseline runs, exit fields are present but set to `null` because there are
-no early exits.
-
-## Worker Metrics
-
-Distributed runs aggregate per-worker fields:
-
-- `<worker_id>_compute_time_total_sec`
-- `<worker_id>_compute_time_avg_sec`
-- `<worker_id>_node_utilization`
-- `<worker_id>_carbon_kg`
-- `<worker_id>_energy_kWh`
-
-Where:
+## Remote compute and communication/runtime overhead
 
 ```text
-<worker_id>_node_utilization =
-    <worker_id>_compute_time_total_sec / total_inference_time_sec
+remote_compute_time_sec = Σ partition_compute_time_sec
+
+communication_overhead_sec =
+    inference_time_sec - remote_compute_time_sec
 ```
 
-The per-sample CSV has matching per-worker compute columns with `_sec` suffixes.
+Overhead includes tensor serialization/deserialization, HTTP/FastAPI handling, LAN transfer, forwarding, response handling, synchronization, and queueing. It is not a packet-level measurement or byte counter. Very small negative values can result from timing noise.
 
-## Multi-Model Metrics
+Aggregate fields include remote-compute total/mean; overhead total/mean/standard deviation/range; `communication_overhead_ratio_avg`; and:
 
-Experiment 2 and the planned Experiment 3 record all distributed metrics plus
-model-instance fields:
+```text
+communication_overhead_ratio_total = Σ overhead_j / Σ t_j
+```
 
-- `num_workers`
-- `num_model_instances`
-- `model_instance_ids`
-- `samples_per_model`
+This denominator is summed task latency, not wall-clock run duration.
 
-For each model instance, fields are prefixed with the model ID:
+## Energy and carbon
 
-- `model_0_num_samples`
-- `model_0_accuracy`
-- `model_0_throughput_samples_per_sec`
-- `model_0_avg_inference_time_sec`
-- `model_0_exit_0_ratio` through `model_0_exit_3_ratio`
-- `model_0_<worker_id>_compute_time_total_sec`
+Single-node runs write `energy_kWh` and `carbon_kg`. Distributed runs write master, per-worker, workers-total, and system-total variants. System energy is master energy plus all worker energy.
 
-The same pattern is repeated for `model_1`, `model_2`, and so on if additional
-model instances are configured.
+Thesis visualizations derive:
 
-## Experiment 3 Placement Metrics
+```text
+energy_per_task_J = system_energy_kWh_total × 3.6e6 / num_samples
+EDP = energy_per_task_J × mean_inference_time_sec
+```
 
-Experiment 3 is intended to compare a memory-aware placement against the
-Experiment 2 placement. In addition to the multi-model metrics above, the
-planned metric set should include:
+CodeCarbon values are software estimates, not external power-meter readings. They are intended mainly for relative comparisons on the same cluster, not absolute laboratory measurements.
 
-- `placement_strategy`
-- `spare_worker_id`
-- `route_model_0`
-- `route_model_1`
-- `<worker_id>_assigned_partitions`
-- `<worker_id>_num_stage_0_partitions`
-- `<worker_id>_num_stage_1_partitions`
-- `<worker_id>_num_stage_2_partitions`
-- `<worker_id>_partition_memory_bytes`
-- `<worker_id>_partition_memory_mb`
-- `max_worker_partition_memory_mb`
-- `min_worker_partition_memory_mb`
-- `partition_memory_imbalance_ratio`
+## Multi-model fields
 
-The primary memory comparison should focus on how many early, high-traffic
-partitions each worker stores. Experiment 2 places both first-stage partitions
-on `worker1`; Experiment 3 places one first-stage partition on `worker1` and one
-first-stage partition on `worker2`.
+Experiment 2/3 add `num_workers`, `num_model_instances`, `model_instance_ids`, and `samples_per_model`. Each instance has prefixed counts, accuracy, throughput, timing, exit, and per-worker compute fields such as `model_0_accuracy` and `model_0_exit_0_ratio`.
 
-Experiment 3 per-sample rows should also preserve the chosen route:
+Per-task rows add `model_instance_id`, `path`, `entry_worker_id`, `terminal_worker_id`, `assigned_partition_id`, and per-worker compute columns.
 
-- `model_instance_id`
-- `route`
-- `entry_worker_id`
-- `terminal_worker_id`
-- `assigned_partition_id`
+## Experiment 3 placement fields
 
-These fields make it possible to verify that:
+Experiment 3 is implemented. Stored aggregates include:
 
-- `model_0` follows `worker1 -> worker3 -> worker3`
-- `model_1` follows `worker2 -> worker3 -> worker3`
-- `worker3` receives the second- and third-stage traffic for both models
+- `placement_strategy` and `spare_worker_id` where applicable;
+- `route_model_0`, `route_model_1`;
+- `<worker>_assigned_partitions`;
+- `<worker>_num_stage_0_partitions`, `_num_stage_1_partitions`, and `_num_stage_2_partitions`.
 
-## Thesis Tables
+The code does **not** emit the partition-memory byte/MB and memory-imbalance fields described in an earlier draft. “Memory-aware” identifies the static placement rationale; the final evaluation measures timing, throughput, utilization, overhead, and energy consequences rather than a stored byte-level memory metric.
 
-The generated table files under `results/thesis_visualizations/**/tables/`
-normalize the raw metrics into thesis-friendly views:
+## Generated artifacts
 
-- `core_metrics`: accuracy, throughput, inference time, communication overhead,
-  and sample count.
-- `energy_metrics`: master, worker, and total energy/carbon fields.
-- `exit_distribution`: exit ratios by experiment.
-- `worker_breakdown`: worker compute, utilization, energy, and carbon values.
-
-The combined CSV and JSON files preserve the broader raw metric set for custom
-analysis.
+`src.visualization.tables` emits CSV/LaTeX; `src.visualization.plots` emits PNG/PDF. Dataset-aware directories under `results/thesis_visualizations/` contain Experiment 1, Experiment 2/3, and energy views for CIFAR-10 and CIFAR-10.1.

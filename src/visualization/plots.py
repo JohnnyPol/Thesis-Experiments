@@ -457,6 +457,28 @@ def build_exp2_best_exp3_worker_utilization_plot(
     return data
 
 
+def build_exp2_exp3_3_worker_utilization_plot(
+    exp2_results_dir: str | Path = EXP2_RESULTS_DIR,
+    exp3_results_dir: str | Path = EXP3_RESULTS_DIR,
+    output_dir: str | Path = "results/thesis_visualizations/exp2_exp3",
+    dataset_name: str | None = "cifar10",
+    figure_name: str = "exp2_exp3_3_worker_utilization",
+    formats: Iterable[str] = DEFAULT_FIGURE_FORMATS,
+) -> pd.DataFrame:
+    """
+    Generate worker-utilization barplots for Exp2 vs Exp3.3.
+    """
+    return build_exp2_best_exp3_worker_utilization_plot(
+        exp2_results_dir=exp2_results_dir,
+        exp3_results_dir=exp3_results_dir,
+        output_dir=output_dir,
+        dataset_name=dataset_name,
+        best_experiment="3.3",
+        figure_name=figure_name,
+        formats=formats,
+    )
+
+
 def build_exp2_exp3_communication_overhead_plot(
     exp2_results_dir: str | Path = EXP2_RESULTS_DIR,
     exp3_results_dir: str | Path = EXP3_RESULTS_DIR,
@@ -1389,6 +1411,7 @@ def parse_args() -> argparse.Namespace:
             "experiment1_exit_distribution",
             "exp2_exp3_throughput_speedup",
             "exp2_best_exp3_worker_utilization",
+            "exp2_exp3_3_worker_utilization",
             "exp2_exp3_communication_overhead",
             "distributed_node_utilization",
             "energy_per_sample",
@@ -1484,6 +1507,21 @@ def main() -> None:
         else:
             generated.append("build_exp2_best_exp3_worker_utilization_plot")
             print("build_exp2_best_exp3_worker_utilization_plot:")
+            print(data.to_string(index=False))
+
+    if args.plot in {"all", "exp2_exp3_3_worker_utilization"}:
+        try:
+            data = build_exp2_exp3_3_worker_utilization_plot(
+                exp2_results_dir=args.exp2_results_dir,
+                exp3_results_dir=args.exp3_results_dir,
+                output_dir=exp2_exp3_output_dir,
+                dataset_name=dataset_name,
+            )
+        except FileNotFoundError as exc:
+            print(f"Skipped build_exp2_exp3_3_worker_utilization_plot: {exc}")
+        else:
+            generated.append("build_exp2_exp3_3_worker_utilization_plot")
+            print("build_exp2_exp3_3_worker_utilization_plot:")
             print(data.to_string(index=False))
 
     if args.plot in {"all", "exp2_exp3_communication_overhead"}:
