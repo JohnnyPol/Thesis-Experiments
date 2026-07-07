@@ -1,6 +1,14 @@
 # Coordinated Early-Exit Inference on Resource-Constrained Edge Systems
 
-Experimental artifact for the diploma thesis **“Coordinated Execution of Multiple Early-Exit Artificial Intelligence Models in Resource-Constrained Edge Environments.”**
+[![Thesis PDF](https://img.shields.io/badge/thesis-PDF-8B0000?style=flat-square)](Thesis.pdf)
+![Python](https://img.shields.io/badge/python-3.x-3776AB?style=flat-square&logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-CPU%20edge%20inference-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)
+![FastAPI](https://img.shields.io/badge/runtime-FastAPI%20%2F%20HTTP-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Datasets](https://img.shields.io/badge/datasets-CIFAR--10%20%7C%20CIFAR--10.1-4B5563?style=flat-square)
+![Hardware](https://img.shields.io/badge/hardware-4%C3%97%20Raspberry%20Pi%204B-A22846?style=flat-square&logo=raspberrypi&logoColor=white)
+![License](https://img.shields.io/badge/license-not%20specified-lightgrey?style=flat-square)
+
+Experimental artifact for the diploma thesis **[“Coordinated Execution of Multiple Early-Exit Artificial Intelligence Models in Resource-Constrained Edge Environments.”](Thesis.pdf)**
 
 This repository evaluates baseline and early-exit ResNet inference on a Raspberry Pi edge cluster. It studies how adaptive computation, model partitioning, partition placement, communication overhead, utilization, and energy interact. The thesis does **not** propose a new neural architecture or training algorithm; it is an experimental systems study of established early-exit models under single-node, distributed, and concurrent multi-model execution.
 
